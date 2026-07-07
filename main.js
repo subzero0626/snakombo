@@ -395,8 +395,8 @@ const SPAWN_INTERVAL_SCALE = 1 / 0.85;
 /** 이동 장애물 등장 최소 점수 (혼돈·이동 장애물 강화 디버프 시 20) */
 const MOVING_OBS_SCORE_THRESHOLD = 35;
 const MOVING_OBS_SCORE_THRESHOLD_BOOST = 20;
-const MOVING_OBS_BASE_CHANCE = 0.1;
-const MOVING_OBS_BASE_CHANCE_HARD = 0.2;
+const MOVING_OBS_BASE_CHANCE = 0.15;
+const MOVING_OBS_BASE_CHANCE_HARD = 0.25;
 const MOVING_OBS_CHANCE_STEP = 0.01;
 const MOVING_OBS_SPEED_MULT = 1.35;
 /** 벽·다른 장애물과 유지할 최소 간격(머리 너비×2, 여유 포함) */
@@ -4132,6 +4132,7 @@ function setScales(n) {
   const t = Math.max(0, Math.floor(n) || 0);
   try { localStorage.setItem(SCALES_KEY, String(t)); } catch (_) {}
   updateScalesUI();
+  try { updateGachaUI(); } catch (_) {}
   return t;
 }
 function addScales(n) {
@@ -4144,33 +4145,70 @@ function updateScalesUI() {
   if (el) el.textContent = String(getScales());
 }
 
-// 장신구: SVG 에셋을 캔버스(뱀 머리)에 렌더 + 꾸미기 목록.
-// 흰 뱀과 겹쳐도 보이도록 흰 부분(브림/방울)에 짙은 외곽선 포함.
-const SANTA_HAT_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 104">' +
-  '<path d="M14 84 C18 42 48 15 86 21 C101 24 106 37 99 49 C90 67 50 82 26 84 Z" fill="#e5312f" stroke="#7f1d1b" stroke-width="3" stroke-linejoin="round"/>' +
-  '<path d="M20 78 C24 46 48 22 74 22 C60 34 46 54 40 76 C33 78 26 79 20 78 Z" fill="#f4514e" opacity="0.5"/>' +
-  '<ellipse cx="60" cy="86" rx="52" ry="14" fill="#ffffff" stroke="#3a3b42" stroke-width="3"/>' +
-  '<ellipse cx="60" cy="83" rx="44" ry="8.5" fill="#eef0f2"/>' +
-  '<circle cx="99" cy="21" r="13.5" fill="#ffffff" stroke="#3a3b42" stroke-width="3"/>' +
-  '<circle cx="94.5" cy="17.5" r="4" fill="#ffffff" opacity="0.75"/>' +
-  '</svg>';
-
-// 등급(추후): ACCESSORIES 항목의 grade에 아래 키를 넣으면 카드에 뱃지로 표시됨
+// 장신구: SVG 에셋을 캔버스(뱀 머리)에 렌더 + 꾸미기/뽑기 목록.
 const ACCESSORY_GRADES = {
   common:    { label: '일반', cls: 'grade-common' },
-  rare:      { label: '희귀', cls: 'grade-rare' },
-  epic:      { label: '영웅', cls: 'grade-epic' },
-  legendary: { label: '전설', cls: 'grade-legendary' }
+  limited:   { label: '한정판', cls: 'grade-limited' }
 };
 
+function emojiAssetSrc(codepoint) {
+  return 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/' + codepoint + '.svg';
+}
+
 const ACCESSORIES = {
-  none:  { id: 'none',  name: '없음',      grade: null,   desc: '장신구를 착용하지 않습니다.' },
-  santa: { id: 'santa', name: '산타 모자', grade: 'rare', desc: '크리스마스 한정 장신구.', src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(SANTA_HAT_SVG) }
+  none: { id: 'none', name: '없음', grade: null, desc: '장신구를 착용하지 않습니다.' },
+  baseball_red: { id: 'baseball_red', name: '야구모자(빨강)', grade: 'common', desc: '빨간색 기본 야구모자.', src: emojiAssetSrc('1f9e2'), drawScale: 1.9 },
+  baseball_blue: { id: 'baseball_blue', name: '야구모자(파랑)', grade: 'common', desc: '파란색 기본 야구모자.', src: emojiAssetSrc('1f9e2'), drawScale: 1.9 },
+  baseball_yellow: { id: 'baseball_yellow', name: '야구모자(노랑)', grade: 'common', desc: '노란색 기본 야구모자.', src: emojiAssetSrc('1f9e2'), drawScale: 1.9 },
+  mint_cap: { id: 'mint_cap', name: '실크햇', grade: 'common', desc: '깔끔한 검은색 실크햇.', src: emojiAssetSrc('1f3a9'), drawScale: 1.9 },
+  pebble_crown: { id: 'pebble_crown', name: '하얀 꽃핀', grade: 'common', desc: '머리 위에 피어난 작은 꽃핀.', src: emojiAssetSrc('1f33c'), drawScale: 1.85 },
+  ruby_crown: { id: 'ruby_crown', name: '졸업모', grade: 'limited', desc: '한정판 졸업모 장신구.', src: emojiAssetSrc('1f393'), drawScale: 1.92 }
 };
 const ACCESSORY_KEY = 'snakombo_accessory_v1';
+const OWNED_ACCESSORIES_KEY = 'snakombo_owned_accessories_v1';
+const GACHA_COST = 75;
+const DUPLICATE_SCALE_REWARD = { common: 75, limited: 350 };
+const ACCESSORY_IDS = Object.keys(ACCESSORIES).filter(id => id !== 'none');
+const ACCESSORY_BY_GRADE = ACCESSORY_IDS.reduce((acc, id) => {
+  const grade = ACCESSORIES[id].grade;
+  if (!acc[grade]) acc[grade] = [];
+  acc[grade].push(id);
+  return acc;
+}, {});
 const accessoryImages = {};
-let equippedAccessory = 'santa'; // 예시로 산타 모자를 기본 착용
+
+function loadOwnedAccessories() {
+  let ids = [];
+  try {
+    const raw = localStorage.getItem(OWNED_ACCESSORIES_KEY);
+    if (raw) ids = JSON.parse(raw);
+  } catch (_) {}
+  if (!Array.isArray(ids)) ids = [];
+  ids = ids.filter(id => ACCESSORIES[id]);
+  if (!ids.includes('none')) ids.unshift('none');
+  try {
+    const saved = localStorage.getItem(ACCESSORY_KEY);
+    if (saved && ACCESSORIES[saved] && !ids.includes(saved)) ids.push(saved);
+  } catch (_) {}
+  return Array.from(new Set(ids));
+}
+let ownedAccessories = loadOwnedAccessories();
+function saveOwnedAccessories() {
+  try { localStorage.setItem(OWNED_ACCESSORIES_KEY, JSON.stringify(ownedAccessories)); } catch (_) {}
+}
+function isAccessoryOwned(id) {
+  return id === 'none' || ownedAccessories.includes(id);
+}
+function addOwnedAccessory(id) {
+  if (!ACCESSORIES[id]) return false;
+  if (isAccessoryOwned(id)) return false;
+  ownedAccessories.push(id);
+  saveOwnedAccessories();
+  updateGachaUI();
+  return true;
+}
+
+let equippedAccessory = 'none';
 try {
   const _savedAcc = localStorage.getItem(ACCESSORY_KEY);
   if (_savedAcc && ACCESSORIES[_savedAcc]) equippedAccessory = _savedAcc;
@@ -4181,6 +4219,7 @@ function preloadAccessories() {
     const a = ACCESSORIES[k];
     if (!a.src) continue;
     const img = new Image();
+    if (/^https?:\/\//.test(a.src)) img.crossOrigin = 'anonymous';
     img.src = a.src;
     accessoryImages[k] = img;
   }
@@ -4222,13 +4261,14 @@ function drawSnakeAccessory(head, neck) {
     accSway = clamp(accSway + accSwayVel, -0.42, 0.42); // 최대 기울기 축소(기존 0.6)
   }
 
-  const W = HEAD_WIDTH * 1.7;
+  const accessory = ACCESSORIES[equippedAccessory] || {};
+  const W = HEAD_WIDTH * (accessory.drawScale || 1.9);
   const H = W * (img.naturalHeight / img.naturalWidth);
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.4)';
   ctx.shadowBlur = 3;
   ctx.shadowOffsetY = 1;
-  ctx.translate(ax, ay - HEAD_WIDTH * 0.55);
+  ctx.translate(ax, ay - HEAD_WIDTH * 0.62);
   ctx.rotate(-0.14 + accSway);
   ctx.drawImage(img, -W * 0.52, -H * 0.83, W, H);
   ctx.restore();
@@ -4260,7 +4300,7 @@ function renderCustomizeList() {
     }
     card.appendChild(thumb);
 
-    // 오른쪽: 이름 + 희귀도 + 설명
+    // 오른쪽: 이름 + 등급 + 설명
     const info = document.createElement('div');
     info.className = 'customize-info';
     const titleRow = document.createElement('div');
@@ -4298,9 +4338,167 @@ function updateCustomizeSelectionUI() {
   });
 }
 
+const gachaDrawButton = document.getElementById('gacha-draw-button');
+const gachaStage = document.getElementById('gacha-stage');
+const gachaResultIcon = document.getElementById('gacha-result-icon');
+const gachaResultKicker = document.getElementById('gacha-result-kicker');
+const gachaResultTitle = document.getElementById('gacha-result-title');
+const gachaResultDesc = document.getElementById('gacha-result-desc');
+const gachaOwnedSummary = document.getElementById('gacha-owned-summary');
+let gachaRolling = false;
+
+const GACHA_TABLE = [
+  { type: 'scales', amount: 30, weight: 30 },
+  { type: 'scales', amount: 75, weight: 15 },
+  { type: 'scales', amount: 300, weight: 5 },
+  { type: 'accessory', grade: 'common', weight: 50 }
+];
+
+function updateGachaUI() {
+  if (gachaDrawButton) gachaDrawButton.disabled = gachaRolling || getScales() < GACHA_COST;
+  if (gachaOwnedSummary) {
+    const ownedCount = ownedAccessories.filter(id => id !== 'none').length;
+    gachaOwnedSummary.textContent = '보유 장신구 ' + ownedCount + '/' + ACCESSORY_IDS.length;
+  }
+}
+function setGachaStage({ rarity, kicker, title, desc, src, symbol }) {
+  if (gachaStage) {
+    gachaStage.dataset.rarity = rarity || 'idle';
+    gachaStage.classList.remove('is-reveal');
+    void gachaStage.offsetWidth;
+    if (rarity && rarity !== 'idle') gachaStage.classList.add('is-reveal');
+  }
+  if (gachaResultKicker) gachaResultKicker.textContent = kicker || '';
+  if (gachaResultTitle) gachaResultTitle.textContent = title || '';
+  if (gachaResultDesc) gachaResultDesc.textContent = desc || '';
+  if (gachaResultIcon) {
+    gachaResultIcon.innerHTML = '';
+    if (src) {
+      const img = document.createElement('img');
+      img.src = src;
+      img.alt = '';
+      gachaResultIcon.appendChild(img);
+    } else {
+      const span = document.createElement('span');
+      span.textContent = symbol || '?';
+      gachaResultIcon.appendChild(span);
+    }
+  }
+}
+function pickGachaReward() {
+  const total = GACHA_TABLE.reduce((sum, r) => sum + r.weight, 0);
+  let roll = Math.random() * total;
+  for (const reward of GACHA_TABLE) {
+    roll -= reward.weight;
+    if (roll < 0) return reward;
+  }
+  return GACHA_TABLE[GACHA_TABLE.length - 1];
+}
+function pickAccessoryIdByGrade(grade) {
+  const ids = ACCESSORY_BY_GRADE[grade] || [];
+  return ids[Math.floor(Math.random() * ids.length)] || null;
+}
+function gradeLabel(grade) {
+  return ACCESSORY_GRADES[grade] ? ACCESSORY_GRADES[grade].label : '';
+}
+function revealGachaReward(reward) {
+  if (reward.type === 'scales') {
+    addScales(reward.amount);
+    setGachaStage({
+      rarity: 'scales',
+      kicker: '비늘 보상',
+      title: reward.amount + '비늘 획득',
+      desc: '반짝이는 비늘이 지갑에 들어왔습니다.',
+      symbol: '◆'
+    });
+    gachaRolling = false;
+    updateGachaUI();
+    playMenuUiSound('primary');
+    return;
+  }
+
+  const id = pickAccessoryIdByGrade(reward.grade);
+  const item = ACCESSORIES[id];
+  if (!item) {
+    gachaRolling = false;
+    updateGachaUI();
+    return;
+  }
+  const duplicate = isAccessoryOwned(id);
+  setGachaStage({
+    rarity: item.grade,
+    kicker: gradeLabel(item.grade) + ' 장신구',
+    title: item.name,
+    desc: duplicate ? '이미 보유 중인 장신구입니다. 대체 보상으로 전환합니다.' : item.desc,
+    src: item.src
+  });
+  playMenuUiSound(item.grade === 'limited' ? 'primary' : 'soft');
+
+  if (!duplicate) {
+    addOwnedAccessory(id);
+    renderCustomizeList();
+    gachaRolling = false;
+    updateGachaUI();
+    return;
+  }
+
+  setTimeout(() => {
+    const refund = DUPLICATE_SCALE_REWARD[item.grade] || 0;
+    addScales(refund);
+    setGachaStage({
+      rarity: 'scales',
+      kicker: '중복 대체 보상',
+      title: refund + '비늘 획득',
+      desc: item.name + '이(가) 대체 보상으로 바뀌었습니다.',
+      symbol: '◆'
+    });
+    gachaRolling = false;
+    updateGachaUI();
+  }, 900);
+}
+function startGachaDraw() {
+  if (gachaRolling) return;
+  if (getScales() < GACHA_COST) {
+    playMenuDenySound();
+    setGachaStage({
+      rarity: 'idle',
+      kicker: '비늘 부족',
+      title: '75비늘이 필요합니다',
+      desc: '게임을 플레이해서 비늘을 더 모아주세요.',
+      symbol: '!'
+    });
+    return;
+  }
+  gachaRolling = true;
+  setScales(getScales() - GACHA_COST);
+  updateGachaUI();
+  playMenuUiSound('primary');
+  if (gachaStage) gachaStage.classList.add('is-rolling');
+  setGachaStage({
+    rarity: 'idle',
+    kicker: '두근두근...',
+    title: '뽑는 중',
+    desc: '상자가 열리고 있습니다.',
+    symbol: '?'
+  });
+  const reward = pickGachaReward();
+  setTimeout(() => {
+    if (gachaStage) gachaStage.classList.remove('is-rolling');
+    revealGachaReward(reward);
+  }, 720);
+}
+if (gachaDrawButton) {
+  gachaDrawButton.addEventListener('click', e => {
+    e.stopPropagation();
+    startGachaDraw();
+  });
+}
+
 preloadAccessories();
 updateScalesUI();
 renderCustomizeList();
+saveOwnedAccessories();
+updateGachaUI();
 
 if (menuTitle) {
   menuTitle.addEventListener('click', e => {

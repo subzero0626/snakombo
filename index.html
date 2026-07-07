@@ -161,16 +161,16 @@
             <ul class="list-inside list-disc space-y-2.5 text-left text-[13px] leading-snug text-zinc-400 sm:space-y-3 sm:text-[14px] sm:leading-relaxed">
               <li>
                 <strong class="text-white">일반</strong>: <strong class="text-white">기본 규칙</strong>으로 플레이합니다.<br>
-                <strong class="text-white">이동 장애물</strong> 등장 확률: 시도 시 기본 <strong class="text-white">10%</strong>(<strong class="text-white">5점마다 +1%p</strong>).
+                <strong class="text-white">이동 장애물</strong> 등장 확률: 시도 시 기본 <strong class="text-white">15%</strong>(<strong class="text-white">5점마다 +1%p</strong>).
               </li>
               <li>
                 <strong class="text-[#f87171]">하드</strong>: <strong class="text-white">이동</strong>/<strong class="text-white">회전</strong>/<strong class="text-white">장애물 생성</strong>이 일반 대비 <strong class="text-white">+35%</strong> 빠르고, <strong class="text-white">장애물 간격</strong>이 더 촘촘합니다(일반 <strong class="text-white">5머리</strong> → 하드 <strong class="text-white">3.5머리</strong>).<br>
-                <strong class="text-white">이동 장애물</strong> 등장 확률: 시도 시 기본 <strong class="text-white">20%</strong>(<strong class="text-white">5점마다 +1%p</strong>).<br>
+                <strong class="text-white">이동 장애물</strong> 등장 확률: 시도 시 기본 <strong class="text-white">25%</strong>(<strong class="text-white">5점마다 +1%p</strong>).<br>
                 <strong class="text-white">해금</strong>: 일반 최고기록 <strong class="text-white">50점</strong> 이상.
               </li>
               <li>
                 <strong class="text-[#a78bfa]">혼돈</strong>: <strong class="text-white">이동</strong>/<strong class="text-white">회전</strong>/<strong class="text-white">장애물 생성</strong>이 일반 대비 <strong class="text-white">+20%</strong> 빠릅니다. 시작 시 <strong class="text-white">랜덤 디버프 3개</strong>가 적용됩니다.<br>
-                <strong class="text-white">이동 장애물</strong> 등장 확률: <strong class="text-white">일반과 동일</strong>(시도 시 기본 <strong class="text-white">10%</strong>, <strong class="text-white">5점마다 +1%p</strong>).<br>
+                <strong class="text-white">이동 장애물</strong> 등장 확률: <strong class="text-white">일반과 동일</strong>(시도 시 기본 <strong class="text-white">15%</strong>, <strong class="text-white">5점마다 +1%p</strong>).<br>
                 <strong class="text-white">해금</strong>: 하드 최고기록 <strong class="text-white">40점</strong> 이상.
               </li>
               <li>
@@ -207,12 +207,15 @@
     </div>
     <div id="menu-hub-wrap" class="absolute right-5 top-[18px] z-30 flex flex-col items-end sm:right-8 sm:top-[30px]">
       <div class="flex items-center gap-2">
-        <div id="scales-display" class="scales-pill" role="status" aria-label="비늘">
+        <div id="scales-display" class="scales-pill" role="status" aria-label="비늘" aria-describedby="scales-tooltip" tabindex="0">
           <svg class="scales-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 3.2 C16.6 3.2 20 6.9 20 11 C20 16 16.3 20.8 12 20.8 C7.7 20.8 4 16 4 11 C4 6.9 7.4 3.2 12 3.2 Z" fill="#34d399"/>
             <path d="M12 3.2 C16.6 3.2 20 6.9 20 11 C20 12.7 19.4 14.5 18.4 16 C15.8 11.8 11.8 8.9 7 8 C8.1 5.1 9.8 3.2 12 3.2 Z" fill="#6ee7b7" opacity="0.7"/>
           </svg>
           <span id="scales-count" class="scales-count">0</span>
+          <span id="scales-tooltip" class="scales-tooltip" role="tooltip">
+            비늘은 게임종료 시 점수 5점당 1개를 얻을 수 있습니다. 또한 하드, 혼돈 모드에선 비늘을 1.5배로 줍니다.
+          </span>
         </div>
         <button
           type="button"
@@ -512,7 +515,7 @@
         </div>
       </div>
 
-      <!-- 뽑기 패널 (준비 중) -->
+      <!-- 뽑기 패널 -->
       <div
         id="menu-gacha-panel"
         class="flex w-[min(18rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-zinc-500/45 bg-zinc-700/92 text-zinc-200 shadow-xl shadow-black/40 ring-1 ring-zinc-400/25"
@@ -526,8 +529,32 @@
             <h2 id="menu-gacha-title" class="text-[15px] font-extrabold tracking-tight text-zinc-50">뽑기</h2>
           </div>
         </div>
-        <div class="menu-info-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-zinc-700/50 px-4 py-10 text-center">
-          <p class="text-sm text-zinc-500">준비 중...</p>
+        <div class="gacha-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-zinc-700/50 px-3 py-3">
+          <div class="gacha-machine" aria-live="polite">
+            <div id="gacha-stage" class="gacha-stage" data-rarity="idle">
+              <div class="gacha-glow" aria-hidden="true"></div>
+              <div id="gacha-result-icon" class="gacha-result-icon" aria-hidden="true">
+                <span>?</span>
+              </div>
+              <div class="gacha-result-copy">
+                <div id="gacha-result-kicker" class="gacha-result-kicker">장신구 뽑기</div>
+                <div id="gacha-result-title" class="gacha-result-title">75비늘로 1회 뽑기</div>
+                <p id="gacha-result-desc" class="gacha-result-desc">비늘 또는 머리 장신구를 얻을 수 있어요.</p>
+              </div>
+            </div>
+            <button id="gacha-draw-button" type="button" class="gacha-draw-button">
+              <span>1회 뽑기</span>
+              <strong>75 비늘</strong>
+            </button>
+            <div id="gacha-owned-summary" class="gacha-owned-summary">보유 장신구 0/6</div>
+          </div>
+          <div class="gacha-rates" aria-label="뽑기 확률">
+            <div><span>30%</span><strong>30비늘</strong></div>
+            <div><span>15%</span><strong>75비늘</strong></div>
+            <div><span>5%</span><strong>300비늘</strong></div>
+            <div><span>50%</span><strong class="grade-common">일반 장신구</strong></div>
+          </div>
+          <p class="gacha-duplicate-note">중복 일반 장신구는 75비늘로 바뀝니다. 한정판은 일반 뽑기에서 나오지 않습니다.</p>
         </div>
       </div>
     </div>
