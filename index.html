@@ -1,0 +1,846 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snakombo</title>
+<link rel="icon" href="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/flame.svg" type="image/svg+xml">
+<link rel="stylesheet" href="main.css?v=20260518-max14">
+<script>
+  // 로딩 화면은 "처음 진입"에만 표시 (새로고침 플래시 방지용: 첫 페인트 전에 결정)
+  (function () {
+    var show = true;
+    try {
+      var nav = performance.getEntriesByType && performance.getEntriesByType('navigation')
+        ? performance.getEntriesByType('navigation')[0]
+        : null;
+      if (nav && nav.type === 'reload') show = false;
+    } catch (e) {}
+    try {
+      if (sessionStorage.getItem('snakombo_loading_seen_v1') === '1') show = false;
+      else sessionStorage.setItem('snakombo_loading_seen_v1', '1');
+    } catch (e) {}
+    document.documentElement.dataset.loading = show ? '1' : '0';
+  })();
+</script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="tailwind-config.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700&family=Caveat:wght@400;700&family=Cinzel:wght@400;700;900&family=Comfortaa:wght@400;700&family=Fredoka:wght@600&family=Gaegu:wght@400;700&family=Jua&family=M+PLUS+Rounded+1c:wght@400;500;700;800;900&family=Nunito:wght@400;600;700;800;900&family=Poppins:wght@400;600;700&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="font-sans text-white antialiased">
+
+  <div class="pointer-events-none fixed inset-0 z-0 bg-[#111]"></div>
+
+  <!-- 로딩 화면 -->
+  <div id="loading-screen" class="loading-screen" aria-hidden="false">
+    <div class="loading-bottom">
+      <div class="loading-row">
+        <div id="loading-text" class="loading-text">Loading 0%</div>
+      </div>
+      <div class="loading-bar" aria-hidden="true">
+        <div id="loading-bar-fill" class="loading-bar-fill" style="width: 0%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 업적 토스트 (우하단) -->
+  <div id="achievement-toast-root" aria-live="polite" aria-atomic="true"></div>
+
+  <div id="menu-screen" class="menu-animate relative z-10 flex min-h-screen flex-col items-center justify-center px-6 py-12">
+    <div id="menu-info-wrap" class="absolute left-5 top-5 z-30 flex flex-col items-start sm:left-8 sm:top-8">
+      <button
+        type="button"
+        id="menu-info-toggle"
+        class="rounded-xl p-1.5 opacity-90 outline-none ring-0 transition hover:bg-white/10 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-white/40"
+        aria-expanded="false"
+        aria-controls="menu-info-panel"
+        aria-label="상세정보 열기"
+      >
+        <img
+          src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/info.svg"
+          alt=""
+          class="pointer-events-none h-9 w-9 brightness-0 invert sm:h-10 sm:w-10"
+          loading="lazy"
+          decoding="async"
+        />
+      </button>
+      <div
+        id="menu-info-panel"
+        class="flex w-[min(24rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-zinc-500/45 bg-zinc-700/92 text-zinc-200 shadow-xl shadow-black/40 ring-1 ring-zinc-400/25"
+        role="region"
+        aria-labelledby="menu-info-title"
+        aria-hidden="true"
+      >
+        <div class="border-b border-zinc-500/35 bg-zinc-600/35 px-4 py-3">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0 pr-1">
+              <h2 id="menu-info-title" class="text-[15px] font-extrabold tracking-tight text-zinc-50">상세정보</h2>
+              <div class="mt-1 flex flex-wrap items-center gap-1.5" role="tablist" aria-label="상세정보 보기 전환">
+                <button
+                  type="button"
+                  id="menu-info-tab-score"
+                  class="menu-info-tab is-active"
+                  role="tab"
+                  aria-selected="true"
+                  aria-controls="menu-info-score"
+                >
+                  점수 체계
+                </button>
+                <button
+                  type="button"
+                  id="menu-info-tab-modes"
+                  class="menu-info-tab"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="menu-info-modes"
+                >
+                  모드 정보
+                </button>
+                <button
+                  type="button"
+                  id="menu-info-tab-patchnotes"
+                  class="menu-info-tab"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="menu-info-patchnotes"
+                >
+                  패치노트
+                </button>
+              </div>
+            </div>
+            <button
+              type="button"
+              id="menu-info-close"
+              class="shrink-0 flex h-8 w-8 items-center justify-center rounded-lg text-xl leading-none text-zinc-500 transition hover:bg-white/10 hover:text-white"
+              aria-label="닫기"
+            >
+              &times;
+            </button>
+          </div>
+        </div>
+        <div class="menu-info-scroll min-h-0 flex-1 space-y-0 overflow-y-auto overflow-x-hidden bg-zinc-700/50 px-4 py-3">
+          <div id="menu-info-score" class="menu-info-pane is-active" role="tabpanel" tabindex="0" aria-label="점수 체계">
+            <ul class="list-inside list-disc space-y-2.5 text-left text-[13px] leading-snug text-zinc-400 sm:space-y-3 sm:text-[14px] sm:leading-relaxed">
+            <li>
+              장애물 가장자리와의 <strong class="text-zinc-200">거리</strong>에 따라 한 번에 얻을 수 있는
+              <strong class="text-zinc-200">기본점</strong>이 달라집니다. 멀리 스쳐 지나갈수록 낮고, 아슬아슬하게 붙을수록 높습니다
+              (대략 <strong class="text-zinc-200">0.5 → 1 → 2 → 4점</strong> 구간).
+            </li>
+            <li>
+              플레이 <strong class="text-zinc-200">시간</strong>이 지날수록
+              <strong class="text-zinc-200">시간 보너스</strong>가 누적됩니다. 이 보너스는
+              <strong class="text-zinc-200">장애물을 근접해서 지나가며 점수를 받을 때</strong>
+              (근접 구역을 벗어나는 순간) <strong class="text-zinc-200">기본점에 추가로</strong> 더해져 들어옵니다.
+              <strong class="text-zinc-200">가장 먼 구간</strong>만 <strong class="text-zinc-200">30초마다 0.5점</strong>씩,
+              <strong class="text-zinc-200">다른 모든 구역</strong>에서는 <strong class="text-zinc-200">15초마다 0.5점</strong>씩 붙습니다.
+            </li>
+            <li>
+              근접 상태를 <strong class="text-zinc-200">잠깐(약 0.15초 이상)</strong> 유지한 뒤, 그 장애물
+              <strong class="text-zinc-200">근접 구역을 벗어날 때</strong> 위에서 계산된 기본점+시간 보너스가 한 번 들어옵니다.
+            </li>
+            <li>
+              점수를 받은 뒤 <strong class="text-zinc-200">2초 안에</strong> 다시 점수를 받으면
+              <strong class="text-zinc-200">콤보</strong>가 1씩 오릅니다. 콤보 2부터는
+              <strong class="text-zinc-200">(콤보 − 1) × 0.5점</strong>이 방금 받는 점수에
+              <strong class="text-zinc-200">추가</strong>됩니다. 2초가 지나면 콤보는 끊깁니다.
+            </li>
+            <li>
+              필드의 <strong class="text-zinc-200">일반·이동 장애물 합계</strong>는 최대
+              <strong class="text-zinc-200">14개</strong>까지 존재합니다.
+            </li>
+            <li>
+              <strong class="text-zinc-200">이동 장애물</strong>도 일반 장애물과 같은 방식으로
+              <strong class="text-zinc-200">근접 통과 점수</strong>를 줍니다. 어두운 회색으로 표시되며,
+              <strong class="text-zinc-200">고정 경로</strong>를 왕복합니다.
+              <strong class="text-zinc-200">35점</strong> 이상부터 등장할 수 있습니다.
+            </li>
+            </ul>
+          </div>
+          <div id="menu-info-modes" class="menu-info-pane" role="tabpanel" tabindex="0" aria-label="모드 정보" aria-hidden="true">
+            <ul class="list-inside list-disc space-y-2.5 text-left text-[13px] leading-snug text-zinc-400 sm:space-y-3 sm:text-[14px] sm:leading-relaxed">
+              <li>
+                <strong class="text-white">일반</strong>: <strong class="text-white">기본 규칙</strong>으로 플레이합니다.<br>
+                <strong class="text-white">이동 장애물</strong> 등장 확률: 시도 시 기본 <strong class="text-white">15%</strong>(<strong class="text-white">5점마다 +1%p</strong>).
+              </li>
+              <li>
+                <strong class="text-[#f87171]">하드</strong>: <strong class="text-white">이동</strong>/<strong class="text-white">회전</strong>/<strong class="text-white">장애물 생성</strong>이 일반 대비 <strong class="text-white">+35%</strong> 빠르고, <strong class="text-white">장애물 간격</strong>이 더 촘촘합니다(일반 <strong class="text-white">5머리</strong> → 하드 <strong class="text-white">3.5머리</strong>).<br>
+                <strong class="text-white">이동 장애물</strong> 등장 확률: 시도 시 기본 <strong class="text-white">25%</strong>(<strong class="text-white">5점마다 +1%p</strong>).<br>
+                <strong class="text-white">해금</strong>: 일반 최고기록 <strong class="text-white">50점</strong> 이상.
+              </li>
+              <li>
+                <strong class="text-[#a78bfa]">혼돈</strong>: <strong class="text-white">이동</strong>/<strong class="text-white">회전</strong>/<strong class="text-white">장애물 생성</strong>이 일반 대비 <strong class="text-white">+20%</strong> 빠릅니다.
+                <details class="chaos-debuff-details mt-1">
+                  <summary class="cursor-pointer select-none marker:text-zinc-500">
+                    시작 시 <strong class="text-white">랜덤 디버프 3개</strong>가 적용됩니다 <span class="text-[11px] text-zinc-500">(눌러서 펼치기)</span>
+                  </summary>
+                  <ul class="mt-1.5 list-inside list-disc space-y-1 pl-3 text-[12px] leading-snug sm:text-[13px]">
+                    <li><strong class="text-zinc-200">장애물 간격 감소</strong>: 장애물 사이 최소 간격이 <strong class="text-white">5머리 → 3머리</strong>로 촘촘해집니다.</li>
+                    <li><strong class="text-zinc-200">뱀 길이 1.5배</strong>: 뱀이 <strong class="text-white">1.5배</strong> 길어져 회피가 더 어려워집니다.</li>
+                    <li><strong class="text-zinc-200">장애물 글리치</strong>: 장애물이 <strong class="text-white">가끔</strong> 순간적으로 흔들리듯 어긋나 보입니다.</li>
+                    <li><strong class="text-zinc-200">이동속도 유동</strong>: 이동 속도가 <strong class="text-white">0.7~1.5배</strong> 사이로 계속 변합니다.</li>
+                    <li><strong class="text-zinc-200">회전 관성 증가</strong>: 방향 전환에 <strong class="text-white">관성</strong>이 붙어 조작이 둔해집니다.</li>
+                    <li><strong class="text-zinc-200">콤보 유지시간 감소</strong>: 콤보 유지시간이 <strong class="text-white">2초 → 1.25초</strong>로 짧아집니다.</li>
+                    <li><strong class="text-zinc-200">충돌 판정 강화</strong>: 충돌 <strong class="text-white">봐주기 판정</strong>이 사라져 더 엄격해집니다.</li>
+                    <li><strong class="text-zinc-200">기본점수 구간 축소</strong>: 가장 먼 <strong class="text-white">0.5점</strong> 구간이 삭제됩니다.</li>
+                    <li><strong class="text-zinc-200">안전구역 축소</strong>: 뱀 주변 <strong class="text-white">장애물 생성 금지 구역</strong>이 좁아져 더 가까이 생깁니다.</li>
+                    <li><strong class="text-zinc-200">이동 장애물 강화</strong>: 이동 장애물이 <strong class="text-white">35점 → 20점</strong>부터 등장합니다.</li>
+                  </ul>
+                </details>
+                <strong class="text-white">이동 장애물</strong> 등장 확률: <strong class="text-white">일반과 동일</strong>(시도 시 기본 <strong class="text-white">15%</strong>, <strong class="text-white">5점마다 +1%p</strong>).<br>
+                <strong class="text-white">해금</strong>: 하드 최고기록 <strong class="text-white">40점</strong> 이상.
+              </li>
+              <li>
+                <strong class="text-[#fbbf24]">로그라이크</strong>: <strong class="text-white">점수제가 아닌 시간제(게이지)</strong> 생존 모드입니다. 화면 하단 게이지가 <strong class="text-white">계속 감소</strong>하고, 점수를 얻으면 그만큼 <strong class="text-white">회복</strong>됩니다. 게이지가 <strong class="text-white">0</strong>이 되면 종료.<br>
+                장애물에 닿으면 <strong class="text-white">그 장애물이 사라지며 통과</strong>하고, 벽에 부딪히면 <strong class="text-white">반대편에서 다시 나옵니다</strong>. 피격 데미지는 <strong class="text-white">10 + (선택한 증강 수 × 2)</strong>이며, 피격 시 <strong class="text-white">콤보가 끊깁니다</strong>(보호막으로 막으면 유지).<br>
+                콤보 상한은 <strong class="text-white">5</strong>이며(증강으로 상승), <strong class="text-white">시간에 따른 기본 점수 상승은 없습니다</strong>.<br>
+                시작 속도는 <strong class="text-white">일반 +12%</strong>, 감소량은 <strong class="text-white">1/초</strong>에서 시작해 <strong class="text-white">2번째 증강 선택(첫 15초)부터</strong> 선택할 때마다 <strong class="text-white">점점 더 크게</strong> 증가합니다(+0.4 → +0.5 → +0.6 …).<br>
+                <strong class="text-white">시작 시 1개</strong>, 이후 <strong class="text-white">15초마다 증강 3개 중 1개</strong>를 골라(숫자키 1~3 또는 클릭) 강화합니다.
+                <details class="rogue-augment-details mt-1">
+                  <summary class="cursor-pointer select-none marker:text-zinc-500">
+                    <strong class="text-white">증강 목록</strong> <span class="text-[11px] text-zinc-500">(눌러서 펼치기)</span>
+                  </summary>
+                  <ul class="mt-1.5 list-inside list-disc space-y-1.5 pl-3 text-[12px] leading-snug sm:text-[13px]">
+                    <li>
+                      <strong class="text-zinc-200">활력</strong>
+                      <ul class="mt-0.5 list-inside list-disc space-y-0.5 pl-3 text-zinc-400">
+                        <li>L1: 최대·현재 게이지 <strong class="text-white">+10</strong></li>
+                        <li>L2: 최대·현재 게이지 <strong class="text-white">+15</strong></li>
+                        <li>L3: 최대·현재 게이지 <strong class="text-white">+25</strong>, 게이지 감소 <strong class="text-white">15% 완화</strong></li>
+                      </ul>
+                    </li>
+                    <li>
+                      <strong class="text-zinc-200">예리</strong>
+                      <ul class="mt-0.5 list-inside list-disc space-y-0.5 pl-3 text-zinc-400">
+                        <li>L1: 통과 기본 점수 <strong class="text-white">+0.5</strong></li>
+                        <li>L2: 통과 기본 점수 <strong class="text-white">+0.75</strong></li>
+                        <li>L3: 통과 기본 점수 <strong class="text-white">+1.5</strong></li>
+                      </ul>
+                    </li>
+                    <li>
+                      <strong class="text-zinc-200">노다지</strong>
+                      <ul class="mt-0.5 list-inside list-disc space-y-0.5 pl-3 text-zinc-400">
+                        <li>L1: <strong class="text-white">18%</strong> 확률로 점수 <strong class="text-white">×2</strong> 장애물 소환</li>
+                        <li>L2: 소환 확률 <strong class="text-white">+10%</strong>, 점수 배율 <strong class="text-white">×2.5</strong></li>
+                        <li>L3: 소환 확률 <strong class="text-white">+12%</strong>, 점수 배율 <strong class="text-white">×3.5</strong></li>
+                      </ul>
+                    </li>
+                    <li>
+                      <strong class="text-zinc-200">질주</strong>
+                      <ul class="mt-0.5 list-inside list-disc space-y-0.5 pl-3 text-zinc-400">
+                        <li>L1: 이동 속도 <strong class="text-white">+10%</strong>, 장애물 소환 <strong class="text-white">+12%</strong></li>
+                        <li>L2: 이동 속도 <strong class="text-white">+8%</strong>, 장애물 소환 <strong class="text-white">+20%</strong></li>
+                        <li>L3: 이동 속도 <strong class="text-white">+14%</strong>, 피격 데미지 <strong class="text-white">40% 감소</strong></li>
+                      </ul>
+                    </li>
+                    <li>
+                      <strong class="text-zinc-200">보호막</strong>
+                      <ul class="mt-0.5 list-inside list-disc space-y-0.5 pl-3 text-zinc-400">
+                        <li>L1: 선택마다 보호막 <strong class="text-white">2회</strong></li>
+                        <li>L2: 선택마다 보호막 <strong class="text-white">3회</strong></li>
+                        <li>L3: 선택마다 보호막 <strong class="text-white">4회</strong>, 소모 시 최대 게이지 <strong class="text-white">10% 회복</strong></li>
+                      </ul>
+                    </li>
+                    <li>
+                      <strong class="text-zinc-200">연계</strong>
+                      <ul class="mt-0.5 list-inside list-disc space-y-0.5 pl-3 text-zinc-400">
+                        <li>L1: 콤보 유지시간 <strong class="text-white">+0.75초</strong>, 최대 콤보 <strong class="text-white">+1</strong></li>
+                        <li>L2: 최대 콤보 <strong class="text-white">+2</strong></li>
+                        <li>L3: 콤보 유지시간 <strong class="text-white">+0.5초</strong>, 콤보당 이동속도 <strong class="text-white">+3%</strong></li>
+                      </ul>
+                    </li>
+                    <li>
+                      <strong class="text-zinc-200">폭파</strong>
+                      <ul class="mt-0.5 list-inside list-disc space-y-0.5 pl-3 text-zinc-400">
+                        <li>L1: 피격 시 주변 장애물 소거, 장애물 소환 <strong class="text-white">+20%</strong></li>
+                        <li>L2: 폭파 범위 확대, 장애물 소환 <strong class="text-white">+30%</strong></li>
+                        <li>L3: 폭파 범위 매우 확대, 장애물 소환 <strong class="text-white">+50%</strong></li>
+                      </ul>
+                    </li>
+                    <li>
+                      <strong class="text-zinc-200">도박</strong>
+                      <ul class="mt-0.5 list-inside list-disc space-y-0.5 pl-3 text-zinc-400">
+                        <li>L1: 득점 배율 <strong class="text-white">0.7~1.5배</strong></li>
+                        <li>L2: 득점 배율 <strong class="text-white">0.8~1.8배</strong></li>
+                        <li>L3: 득점 배율 <strong class="text-white">1~2.2배</strong></li>
+                      </ul>
+                    </li>
+                    <li>
+                      <strong class="text-zinc-200">유령</strong>
+                      <ul class="mt-0.5 list-inside list-disc space-y-0.5 pl-3 text-zinc-400">
+                        <li>L1: 자기 몸 피격 무시, 이동 속도 <strong class="text-white">+15%</strong></li>
+                        <li>L2: 벽 피격 무시, 장애물 소환 <strong class="text-white">+20%</strong></li>
+                        <li>L3: 피격 데미지 <strong class="text-white">20% 감소</strong>, 이동 속도 <strong class="text-white">+15%</strong></li>
+                      </ul>
+                    </li>
+                    <li>
+                      <strong class="text-zinc-200">미래</strong> <span class="text-[11px] text-zinc-500">(최대 Lv.2)</span>
+                      <ul class="mt-0.5 list-inside list-disc space-y-0.5 pl-3 text-zinc-400">
+                        <li>L1: 등장 증강이 각각 <strong class="text-white">25%</strong> 확률로 수치가 강화되어 나옵니다. 보호막·도박 등 수치가 교체되는 증강은 강화되지 않으며, 그 확률은 다른 카드로 넘어갑니다. L3 고유 능력은 강화되지 않고 수치만 약 <strong class="text-white">+20%</strong>(정수·소수 반올림)됩니다.</li>
+                        <li>L2: 증강을 선택할 때마다 최대 게이지의 <strong class="text-white">25%</strong>를 회복합니다.</li>
+                      </ul>
+                    </li>
+                  </ul>
+                </details>
+              </li>
+              <li>
+                <strong class="text-[#60a5fa]">멀티플레이</strong>: <strong class="text-white">로컬 2인</strong>(한 PC) 모드입니다. 화이트(A/D), 그레이(←/→)로 조작하며 <strong class="text-white">서로 충돌하지 않습니다</strong>. 점수·장애물 규칙은 <strong class="text-white">일반과 같습니다</strong>.<br>
+                <strong class="text-white">승리</strong>: 상대가 먼저 죽거나, 먼저 <strong class="text-white">50점</strong> 달성.<br>
+                <strong class="text-white">온라인</strong>: <strong class="text-white">업데이트 예정</strong>.
+              </li>
+              <li>
+                <strong class="text-[#4ade80]">연습</strong>: 설정 패널로 <strong class="text-white">속도</strong>/<strong class="text-white">회전</strong>/<strong class="text-white">장애물 생성</strong>/<strong class="text-white">콤보 유지</strong>/<strong class="text-white">무적</strong> 등을 조절하며, 시간 경과에 따른 <strong class="text-white">속도·점수 보너스 증가는 없습니다</strong>. <strong class="text-white">업적/기록</strong>에는 반영되지 않습니다.
+              </li>
+            </ul>
+          </div>
+          <div id="menu-info-patchnotes" class="menu-info-pane" role="tabpanel" tabindex="0" aria-label="패치노트" aria-hidden="true">
+            <div class="space-y-8 text-left text-[13px] leading-snug text-zinc-400 sm:text-[14px] sm:leading-relaxed">
+              <section class="space-y-3">
+                <h3 class="text-[12px] font-extrabold tracking-tight text-zinc-200">ver.1.1[2026.05.18]</h3>
+                <ul class="list-inside list-disc space-y-3.5">
+                  <li><strong class="text-zinc-200">움직이는 장애물</strong> 추가</li>
+                  <li>업적 <strong class="text-zinc-200">「무브먼트」</strong> 추가</li>
+                </ul>
+              </section>
+              <section class="space-y-3">
+                <h3 class="text-[12px] font-extrabold tracking-tight text-zinc-200">ver.1.0[2026.05.16]</h3>
+                <ul class="list-inside list-disc space-y-3.5">
+                  <li>모바일에서도 플레이할 수 있습니다</li>
+                  <li>화면 <strong class="text-zinc-200">왼쪽·오른쪽</strong>을 터치해 뱀을 조작합니다(PC의 A/D와 같습니다)</li>
+                  <li><strong class="text-zinc-200">양쪽을 동시에</strong> 터치하면 <strong class="text-zinc-200">일시정지</strong>됩니다</li>
+                </ul>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="menu-hub-wrap" class="absolute right-5 top-[18px] z-30 flex flex-col items-end sm:right-8 sm:top-[30px]">
+      <div class="flex items-center gap-2">
+        <div id="scales-display" class="scales-pill" role="status" aria-label="비늘" aria-describedby="scales-tooltip" tabindex="0" style="display:none">
+          <svg class="scales-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3.2 C16.6 3.2 20 6.9 20 11 C20 16 16.3 20.8 12 20.8 C7.7 20.8 4 16 4 11 C4 6.9 7.4 3.2 12 3.2 Z" fill="#34d399"/>
+            <path d="M12 3.2 C16.6 3.2 20 6.9 20 11 C20 12.7 19.4 14.5 18.4 16 C15.8 11.8 11.8 8.9 7 8 C8.1 5.1 9.8 3.2 12 3.2 Z" fill="#6ee7b7" opacity="0.7"/>
+          </svg>
+          <span id="scales-count" class="scales-count">0</span>
+          <span id="scales-tooltip" class="scales-tooltip" role="tooltip">
+            비늘은 게임종료 시 점수 5점당 1개를 얻을 수 있습니다. 또한 하드, 혼돈 모드에선 비늘을 1.5배로 줍니다.
+          </span>
+        </div>
+        <button
+          type="button"
+          id="menu-hub-toggle"
+          class="rounded-xl p-1.5 opacity-90 outline-none ring-0 transition hover:bg-white/10 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-white/40"
+          aria-expanded="false"
+          aria-controls="menu-hub-panel"
+          aria-label="메뉴 열기"
+        >
+          <img
+            src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/layout-grid.svg"
+            alt=""
+            class="pointer-events-none h-9 w-9 brightness-0 invert sm:h-10 sm:w-10"
+            loading="lazy"
+            decoding="async"
+          />
+        </button>
+      </div>
+      <!-- 2x2 런처 그리드 -->
+      <div id="menu-hub-panel" class="menu-hub-panel" role="menu" aria-label="메뉴" aria-hidden="true">
+        <button type="button" class="menu-hub-item" data-hub="achievements" role="menuitem">
+          <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/crown.svg" alt="" class="menu-hub-icon" loading="lazy" decoding="async" />
+          <span>업적</span>
+        </button>
+        <button type="button" class="menu-hub-item" data-hub="customize" role="menuitem">
+          <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/shirt.svg" alt="" class="menu-hub-icon" loading="lazy" decoding="async" />
+          <span>꾸미기</span>
+        </button>
+        <button type="button" class="menu-hub-item" data-hub="quest" role="menuitem">
+          <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/scroll-text.svg" alt="" class="menu-hub-icon" loading="lazy" decoding="async" />
+          <span>퀘스트</span>
+        </button>
+        <button type="button" class="menu-hub-item" data-hub="gacha" role="menuitem">
+          <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/gift.svg" alt="" class="menu-hub-icon" loading="lazy" decoding="async" />
+          <span>뽑기</span>
+        </button>
+      </div>
+      <div
+        id="achievements-panel"
+        class="flex w-[min(18rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-zinc-500/45 bg-zinc-700/92 text-zinc-200 shadow-xl shadow-black/40 ring-1 ring-zinc-400/25"
+        role="region"
+        aria-labelledby="achievements-heading"
+        aria-hidden="true"
+      >
+        <div class="border-b border-zinc-500/35 bg-zinc-600/35 px-4 py-3">
+          <div class="flex items-start justify-between gap-2">
+            <button type="button" class="menu-hub-back" data-hub-back aria-label="뒤로">&larr;</button>
+            <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <h2 id="achievements-heading" class="text-[15px] font-extrabold tracking-tight text-zinc-50">업적</h2>
+              <p class="max-w-[14rem] text-[11px] font-medium leading-snug text-zinc-400 sm:text-xs">달성한 항목이 여기에 쌓여요</p>
+            </div>
+            <div id="achievements-progress" class="shrink-0 self-center text-[11px] font-extrabold tabular-nums text-zinc-300/85">달성률 0%</div>
+          </div>
+        </div>
+        <div
+          class="achievements-scroll min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden bg-zinc-700/50 px-2 py-3"
+          role="list"
+          aria-label="업적 목록"
+        >
+          <div role="listitem" class="achievement-card" data-achievement-id="first_play" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">첫 플레이</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">게임을 한 판 플래이 하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="score_35" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">점수 사냥꾼</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">일반모드에서 한 판에서 35점 이상을 획득하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="combo_10" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">콤보 마스터</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">한 판에서 콤보 10 이상을 달성하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="tutorial_done" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">튜토리얼 수료</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">튜토리얼을 완료하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="high_60" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">한계 돌파</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">일반모드에서 최고 기록을 85점 이상으로 올리세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="games_20" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">단골손님</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">게임을 20회 플래이 하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="lucky_7_streak" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">행운아</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">딱 7점을 2회 연속으로 획득하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="square_streak_3" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">제제곱수</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">3회 연속으로 5가 넘는 제곱수인 점수를 얻으세요!</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="tikkeul_taesan" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">티끌모아 태산</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">한 게임에서 5콤보 이상 달성하지 않고, 콤보점수로 25점 이상을 얻으세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="movement" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">무브먼트</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">움직이는 장애물을 2회 연속 통과하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="lane_forbidden_25" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">통행금지</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">일반모드에서 왼쪽 또는 오른쪽에만 머물며 25점 이상을 획득하세요(2초까지는 허용)</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="devil_44" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">악마</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">일반모드에서 딱 44점을 획득하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="practice_20min" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">연습이 완벽을 만든다</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">연습모드를 총 20분 플래이하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="archdevil_44_hard" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">대악마</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">하드모드에서 점수 딱 44점을 획득하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="chaos_99" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">소멸</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">혼돈모드에서 99점 이상을 달성하세요</p>
+          </div>
+          <div
+            role="listitem"
+            class="achievement-card achievement-hidden"
+            data-achievement-id="hidden_early_bird"
+            data-achievement-hidden="true"
+            data-reveal-desc="아침 7시~8시 사이에 한 판에서 15점 이상을 획득하세요"
+          >
+            <div class="achievement-title-row">
+              <span class="achievement-title">일찍 일어나는 새</span>
+              <span class="achievement-kind">[숨겨진 업적]</span>
+            </div>
+            <p class="achievement-desc achievement-desc-hidden">???</p>
+          </div>
+          <div
+            role="listitem"
+            class="achievement-card achievement-hidden"
+            data-achievement-id="hidden_practice_500"
+            data-achievement-hidden="true"
+            data-reveal-desc="연습모드에서 500점을 달성하세요"
+          >
+            <div class="achievement-title-row">
+              <span class="achievement-title">연습의 대가</span>
+              <span class="achievement-kind">[숨겨진 업적]</span>
+            </div>
+            <p class="achievement-desc achievement-desc-hidden">???</p>
+          </div>
+          <div
+            role="listitem"
+            class="achievement-card achievement-hidden"
+            data-achievement-id="hidden_golden_death"
+            data-achievement-hidden="true"
+            data-reveal-desc="황금 장애물에 죽으세요!"
+          >
+            <div class="achievement-title-row">
+              <span class="achievement-title">황금빛 죽음</span>
+              <span class="achievement-kind">[숨겨진 업적]</span>
+            </div>
+            <p class="achievement-desc achievement-desc-hidden">???</p>
+          </div>
+          <div
+            role="listitem"
+            class="achievement-card achievement-hidden"
+            data-achievement-id="hidden_dizzy_mode_switch"
+            data-achievement-hidden="true"
+            data-reveal-desc="2초동안 모드 변경을 10번 이상 하세요!"
+          >
+            <div class="achievement-title-row">
+              <span class="achievement-title">어지러워요</span>
+              <span class="achievement-kind">[숨겨진 업적]</span>
+            </div>
+            <p class="achievement-desc achievement-desc-hidden">???</p>
+          </div>
+          <div
+            role="listitem"
+            class="achievement-card achievement-hidden"
+            data-achievement-id="hidden_beginner"
+            data-achievement-hidden="true"
+            data-reveal-desc="15초 동안 0점을 유지하세요"
+          >
+            <div class="achievement-title-row">
+              <span class="achievement-title">초보자..?</span>
+              <span class="achievement-kind">[숨겨진 업적]</span>
+            </div>
+            <p class="achievement-desc achievement-desc-hidden">???</p>
+          </div>
+          <div
+            role="listitem"
+            class="achievement-card achievement-hidden"
+            data-achievement-id="hidden_ace_a_only"
+            data-achievement-hidden="true"
+            data-reveal-desc="한 게임에서 a키만을 사용해 25점 이상 얻으세요"
+          >
+            <div class="achievement-title-row">
+              <span class="achievement-title">"A"ce</span>
+              <span class="achievement-kind">[숨겨진 업적]</span>
+            </div>
+            <p class="achievement-desc achievement-desc-hidden">???</p>
+          </div>
+          <div
+            role="listitem"
+            class="achievement-card achievement-hidden"
+            data-achievement-id="hidden_tail_chain"
+            data-achievement-hidden="true"
+            data-reveal-desc="자신의 몸에 닿아 15번 죽으세요"
+          >
+            <div class="achievement-title-row">
+              <span class="achievement-title">꼬리에 꼬리를 무는</span>
+              <span class="achievement-kind">[숨겨진 업적]</span>
+            </div>
+            <p class="achievement-desc achievement-desc-hidden">???</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 꾸미기 패널 (준비 중) -->
+      <div
+        id="menu-customize-panel"
+        class="flex w-[min(18rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-zinc-500/45 bg-zinc-700/92 text-zinc-200 shadow-xl shadow-black/40 ring-1 ring-zinc-400/25"
+        role="region"
+        aria-labelledby="menu-customize-title"
+        aria-hidden="true"
+      >
+        <div class="border-b border-zinc-500/35 bg-zinc-600/35 px-4 py-3">
+          <div class="flex items-center gap-2">
+            <button type="button" class="menu-hub-back" data-hub-back aria-label="뒤로">&larr;</button>
+            <h2 id="menu-customize-title" class="text-[15px] font-extrabold tracking-tight text-zinc-50">꾸미기</h2>
+          </div>
+        </div>
+        <div class="menu-info-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-zinc-700/50 px-4 py-10 text-center">
+          <p class="text-sm text-zinc-500">개발중입니다</p>
+        </div>
+      </div>
+
+      <!-- 퀘스트 패널 (준비 중) -->
+      <div
+        id="menu-quest-panel"
+        class="flex w-[min(18rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-zinc-500/45 bg-zinc-700/92 text-zinc-200 shadow-xl shadow-black/40 ring-1 ring-zinc-400/25"
+        role="region"
+        aria-labelledby="menu-quest-title"
+        aria-hidden="true"
+      >
+        <div class="border-b border-zinc-500/35 bg-zinc-600/35 px-4 py-3">
+          <div class="flex items-center gap-2">
+            <button type="button" class="menu-hub-back" data-hub-back aria-label="뒤로">&larr;</button>
+            <h2 id="menu-quest-title" class="text-[15px] font-extrabold tracking-tight text-zinc-50">퀘스트</h2>
+          </div>
+        </div>
+        <div class="menu-info-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-zinc-700/50 px-4 py-10 text-center">
+          <p class="text-sm text-zinc-500">준비 중...</p>
+        </div>
+      </div>
+
+      <!-- 뽑기 패널 -->
+      <div
+        id="menu-gacha-panel"
+        class="flex w-[min(18rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-zinc-500/45 bg-zinc-700/92 text-zinc-200 shadow-xl shadow-black/40 ring-1 ring-zinc-400/25"
+        role="region"
+        aria-labelledby="menu-gacha-title"
+        aria-hidden="true"
+      >
+        <div class="border-b border-zinc-500/35 bg-zinc-600/35 px-4 py-3">
+          <div class="flex items-center gap-2">
+            <button type="button" class="menu-hub-back" data-hub-back aria-label="뒤로">&larr;</button>
+            <h2 id="menu-gacha-title" class="text-[15px] font-extrabold tracking-tight text-zinc-50">뽑기</h2>
+          </div>
+        </div>
+        <div class="menu-info-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-zinc-700/50 px-4 py-10 text-center">
+          <p class="text-sm text-zinc-500">개발중입니다</p>
+        </div>
+      </div>
+    </div>
+    <div class="w-full max-w-md text-center">
+      <div id="menu-title-wrap" class="mb-3">
+        <canvas
+          id="menu-title-flame-canvas"
+          width="320"
+          height="140"
+          aria-hidden="true"
+        ></canvas>
+        <h1
+          id="menu-title"
+          role="button"
+          tabindex="0"
+          aria-label="모드 전환: 일반, 하드, 혼돈, 연습"
+          class="inline-block cursor-pointer select-none text-5xl font-black tracking-tight sm:text-6xl md:text-7xl"
+        >
+          <span class="mt-chunk" style="--mt-c:0"><span class="mt-char" style="--mt-i:0">S</span><span class="mt-char" style="--mt-i:1">n</span><span class="mt-char" style="--mt-i:2">a</span></span><span class="mt-chunk" style="--mt-c:1"><span class="mt-char" style="--mt-i:3">k</span><span class="mt-char" style="--mt-i:4">o</span><span class="mt-char" style="--mt-i:5">m</span></span><span class="mt-chunk" style="--mt-c:2"><span class="mt-char" style="--mt-i:6">b</span><span class="mt-char" style="--mt-i:7">o</span></span>
+        </h1>
+        <div id="menu-title-tooltip" aria-hidden="true">
+          <span class="menu-title-tooltip-hint">글자를 클릭해 모드를 고르세요</span>
+          <span id="menu-title-tooltip-mode" class="menu-title-tooltip-mode-label">일반</span>
+        </div>
+      </div>
+      <p class="mb-2 text-sm font-semibold text-zinc-500 sm:text-base">
+        고속 정밀 스네이크 게임
+      </p>
+      <p id="menu-high-score" class="mb-12 text-sm font-bold tabular-nums text-amber-300/95 sm:text-[15px]">
+        최고 기록 0점
+      </p>
+
+      <div id="menu-start-actions" class="flex flex-col items-center gap-10">
+        <div class="menu-start-row" data-start-stage="start">
+          <span id="menu-start" role="button" tabindex="0"
+            class="cursor-pointer select-none text-3xl font-black tracking-tight text-zinc-200 antialiased transition hover:text-white sm:text-4xl">게임 시작</span>
+          <div id="menu-start-choices" class="menu-start-choices menu-start-choices--choose text-3xl font-black tracking-tight sm:text-4xl" aria-hidden="true">
+            <span id="menu-start-local" role="button" tabindex="0" class="menu-start-choice">로컬</span>
+            <span id="menu-start-online" role="button" tabindex="0" class="menu-start-choice">온라인</span>
+          </div>
+          <span id="menu-start-require" class="menu-start-require hidden"></span>
+        </div>
+        <span id="menu-tutorial" role="button" tabindex="0"
+          class="-translate-y-0.5 cursor-pointer select-none text-2xl font-black tracking-tight text-zinc-500 antialiased transition hover:text-zinc-300 sm:text-3xl">튜토리얼</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Online lobby overlay -->
+  <div id="menu-start-online-panel" class="online-overlay hidden">
+    <div class="online-overlay-box">
+      <div id="online-lobby" class="online-lobby">
+        <p class="online-panel-title">온라인 멀티플레이</p>
+        <button id="online-create-btn" class="online-btn online-btn-primary" type="button">방 만들기</button>
+        <div class="online-join-row">
+          <input id="online-join-input" type="text" maxlength="6" placeholder="방 코드" class="online-join-input" autocomplete="off" spellcheck="false">
+          <button id="online-join-btn" class="online-btn online-btn-secondary" type="button">참가</button>
+        </div>
+        <button id="online-back-btn" class="online-btn-text" type="button">&larr; 뒤로</button>
+      </div>
+      <div id="online-host-waiting" class="online-sub-panel hidden">
+        <p class="online-panel-title">방 코드</p>
+        <div id="online-room-code-display" class="online-room-code">----</div>
+        <button id="online-copy-btn" class="online-btn-small" type="button">복사</button>
+        <p class="online-waiting-text">상대를 기다리는 중<span class="online-dots"></span></p>
+        <button id="online-cancel-btn" class="online-btn-text" type="button">취소</button>
+      </div>
+      <div id="online-client-joining" class="online-sub-panel hidden">
+        <p class="online-waiting-text">연결 중<span class="online-dots"></span></p>
+        <button id="online-cancel-join-btn" class="online-btn-text" type="button">취소</button>
+      </div>
+      <div id="online-connected" class="online-sub-panel hidden">
+        <p class="online-connected-text">&#10003; 연결 완료!</p>
+        <p class="online-connected-sub">곧 게임이 시작됩니다...</p>
+      </div>
+      <div id="online-error" class="online-sub-panel hidden">
+        <p id="online-error-text" class="online-error-text">연결 실패</p>
+        <button id="online-error-back-btn" class="online-btn-text" type="button">돌아가기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 연습 모드 설정 패널 (게임 중 연습 모드에서만 표시) -->
+  <div id="practice-panel-dim" class="fixed inset-0 z-[65] hidden bg-black/35"></div>
+  <div
+    id="practice-panel-wrap"
+    class="fixed left-4 top-4 z-[70] hidden w-[min(19rem,calc(100vw-2rem))] select-none"
+    aria-hidden="true"
+  >
+    <div class="practice-panel-shell overflow-hidden rounded-2xl border border-zinc-500/35 bg-zinc-950 shadow-2xl shadow-black/60">
+      <div class="practice-panel-header flex items-center justify-between gap-2 border-b border-zinc-500/25 bg-zinc-950 px-3 py-2.5">
+        <div class="practice-panel-meta min-w-0">
+          <div class="text-[13px] font-extrabold tracking-tight text-zinc-50">연습 설정</div>
+          <div class="mt-0.5 text-[11px] font-semibold leading-snug text-zinc-500">0.5배 ~ 3배</div>
+        </div>
+        <button
+          type="button"
+          id="practice-panel-toggle"
+          class="shrink-0 flex h-9 w-9 items-center justify-center rounded-xl text-zinc-300 outline-none ring-0 transition hover:bg-zinc-800/70 hover:text-white focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
+          aria-expanded="true"
+          aria-controls="practice-panel-body"
+        >
+          <span id="practice-panel-toggle-icon" class="text-[28px] leading-none">▾</span>
+        </button>
+      </div>
+
+      <div id="practice-panel-body" class="space-y-3 px-4 py-3">
+        <div class="space-y-1.5 rounded-xl border border-zinc-500/25 bg-zinc-900/60 px-3 py-2">
+          <div class="flex items-baseline justify-between gap-2">
+            <div class="text-[12px] font-extrabold text-zinc-100">이동속도</div>
+            <div id="practice-speed-val" class="text-[11px] font-extrabold text-zinc-300/80">1.0×</div>
+          </div>
+          <input id="practice-speed" type="range" min="0.5" max="3" step="0.1" value="1" class="w-full" />
+        </div>
+
+        <div class="space-y-1.5 rounded-xl border border-zinc-500/25 bg-zinc-900/60 px-3 py-2">
+          <div class="flex items-baseline justify-between gap-2">
+            <div class="text-[12px] font-extrabold text-zinc-100">회전속도</div>
+            <div id="practice-turn-val" class="text-[11px] font-extrabold text-zinc-300/80">1.0×</div>
+          </div>
+          <input id="practice-turn" type="range" min="0.5" max="3" step="0.1" value="1" class="w-full" />
+        </div>
+
+        <div class="space-y-1.5 rounded-xl border border-zinc-500/25 bg-zinc-900/60 px-3 py-2">
+          <div class="flex items-baseline justify-between gap-2">
+            <div class="text-[12px] font-extrabold text-zinc-100">장애물 생성빈도</div>
+            <div id="practice-spawn-val" class="text-[11px] font-extrabold text-zinc-300/80">1.0×</div>
+          </div>
+          <input id="practice-spawn" type="range" min="0.5" max="3" step="0.1" value="1" class="w-full" />
+        </div>
+
+        <div class="space-y-1.5 rounded-xl border border-zinc-500/25 bg-zinc-900/60 px-3 py-2">
+          <div class="flex items-baseline justify-between gap-2">
+            <div class="text-[12px] font-extrabold text-zinc-100">콤보 유지시간</div>
+            <div id="practice-combo-val" class="text-[11px] font-extrabold text-zinc-300/80">1.0×</div>
+          </div>
+          <input id="practice-combo" type="range" min="0.5" max="3" step="0.1" value="1" class="w-full" />
+        </div>
+
+        <label class="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-zinc-500/25 bg-zinc-900/60 px-3 py-2">
+          <div class="text-[12px] font-extrabold text-zinc-100">무적</div>
+          <input id="practice-invincible" type="checkbox" class="h-4 w-4 accent-white" />
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- 튜토리얼 -->
+  <div id="tutorial-modal" class="fixed inset-0 z-[60] hidden overflow-y-auto bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="tutorial-title">
+    <div class="flex min-h-full items-center justify-center py-6">
+    <div class="relative max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-white/12 bg-zinc-950/95 p-8 shadow-2xl shadow-black/70 ring-1 ring-white/8">
+      <button type="button" id="tutorial-close" class="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-xl text-2xl leading-none text-zinc-500 transition hover:bg-white/10 hover:text-white" aria-label="닫기">&times;</button>
+      <h2 id="tutorial-title" class="mb-5 pr-10 text-2xl font-extrabold text-white">튜토리얼</h2>
+      <ul id="tutorial-list" class="list-inside list-disc space-y-3 text-left text-[15px] leading-relaxed text-zinc-400">
+        <li id="tutorial-li-controls"><kbd class="rounded-md border border-white/15 bg-white/10 px-2 py-0.5 text-xs font-bold text-zinc-200">A</kbd> / <kbd class="rounded-md border border-white/15 bg-white/10 px-2 py-0.5 text-xs font-bold text-zinc-200">D</kbd> — 좌우로 방향 전환. 시간이 지날수록 속도가 빨라집니다.</li>
+        <li>흰색 덩어리 <strong class="text-zinc-200">장애물</strong>, 화면 <strong class="text-zinc-200">벽</strong>, 그리고 자기 자신의 <strong class="text-zinc-200">몸</strong>에 닿지 마세요.</li>
+        <li>장애물 가장자리를 아슬아슬하게 지나가면 점수가 오릅니다. 연속으로 통과하면 <strong class="text-zinc-200">콤보</strong> 보너스가 붙습니다.</li>
+        <li id="tutorial-li-restart">게임 오버 후 <kbd class="rounded-md border border-white/15 bg-white/10 px-2 py-0.5 text-xs font-bold text-zinc-200">Space</kbd> 로 다시 시작합니다.</li>
+      </ul>
+    </div>
+    </div>
+  </div>
+
+<div id="online-status" class="online-status hidden">
+  <span id="online-status-dot" class="online-status-dot"></span>
+  <span id="online-status-text">연결됨</span>
+</div>
+
+<div id="portrait-required-overlay" class="portrait-required-overlay" aria-hidden="true">
+  <div class="portrait-required-icon">
+    <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/smartphone.svg" alt="" class="portrait-required-phone" />
+  </div>
+  <div class="portrait-required-title">가로 모드로 돌려주세요</div>
+  <div class="portrait-required-subtitle">메인 화면은 가로 모드에서 보입니다</div>
+</div>
+
+<canvas id="c" class="fixed inset-0 z-20 hidden h-full w-full"></canvas>
+
+<!-- 튜토리얼 완료 후 메인 화면 안내 (1회) -->
+<div id="main-intro-overlay" class="hidden" aria-hidden="true" role="dialog" aria-labelledby="main-intro-title">
+  <div class="main-intro-backdrop"></div>
+  <button id="main-intro-close" type="button" aria-label="안내 닫기">&times;</button>
+  <h2 id="main-intro-title" class="main-intro-sr-only">메인 화면 안내</h2>
+  <div class="main-intro-tip main-intro-tip-info">
+    <div class="main-intro-tip-arrow" aria-hidden="true">↑</div>
+    <strong>정보</strong>
+    점수 체계, 모드 정보, 패치노트를 확인할 수 있어요
+  </div>
+  <div class="main-intro-tip main-intro-tip-achievements">
+    <div class="main-intro-tip-arrow" aria-hidden="true">↑</div>
+    <strong>메뉴</strong>
+    업적, 꾸미기, 퀘스트, 가챠를 여기서 볼 수 있어요
+  </div>
+  <div class="main-intro-tip main-intro-tip-mode is-right-of-title">
+    <div class="main-intro-tip-arrow" aria-hidden="true">←</div>
+    <strong>모드 변경</strong>
+    제목 글자를 클릭해서 모드를 바꿀 수 있어요
+  </div>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="skins.js?v=20260708-future3" defer></script>
+<script src="online.js?v=20260708-future3" defer></script>
+<script src="main.js?v=20260708-future3" defer></script>
+</body>
+</html>
