@@ -974,10 +974,10 @@ const ROGUE_AUGMENTS = [
   {
     id: 'bonusobs', cat: 'offense', name: '노다지',
     levels: [
-      { desc: [{ h: '18%' }, ' 확률로 점수 ', { h: '×2' }, ' 장애물 소환'],
-        apply() { rogueBonusChance += 0.18; rogueBonusMult = 2; } },
-      { desc: ['소환 확률 ', { h: '+10%' }, ', 점수 배율 ', { h: '×2.5' }],
-        apply() { rogueBonusChance += 0.10; rogueBonusMult = 2.5; } },
+      { desc: [{ h: '15%' }, ' 확률로 점수 ', { h: '×2' }, ' 장애물 소환'],
+        apply() { rogueBonusChance += 0.15; rogueBonusMult = 2; } },
+      { desc: ['소환 확률 ', { h: '+8%' }, ', 점수 배율 ', { h: '×2.5' }],
+        apply() { rogueBonusChance += 0.08; rogueBonusMult = 2.5; } },
       { desc: ['소환 확률 ', { h: '+12%' }, ', 점수 배율 ', { h: '×3.5' }],
         apply() { rogueBonusChance += 0.12; rogueBonusMult = 3.5; } }
     ]
@@ -985,26 +985,26 @@ const ROGUE_AUGMENTS = [
   {
     id: 'mark', cat: 'offense', name: '표식',
     levels: [
-      { desc: ['5초마다 장애물 2개에 표식, 표식당 점수 ', { h: '+2' }, ' (최대 3스택)'],
+      { desc: ['5초마다 장애물 2개에 표식, 표식당 점수 ', { h: '+1.5' }, ' (최대 3스택)'],
         apply() {
           rogueMarkTargets = 2;
-          rogueMarkBonus = 2;
+          rogueMarkBonus = 1.5;
           rogueMarkIntervalMs = 5000;
           rogueMarkTransferP = 0;
           rogueMarkNextMs = rogueRunMs + rogueMarkIntervalMs;
         } },
-      { desc: ['4초마다 장애물 3개에 표식, 표식당 점수 ', { h: '+2' }, ' (최대 3스택)'],
+      { desc: ['4초마다 장애물 3개에 표식, 표식당 점수 ', { h: '+1.5' }, ' (최대 3스택)'],
         apply() {
           rogueMarkTargets = 3;
-          rogueMarkBonus = 2;
+          rogueMarkBonus = 1.5;
           rogueMarkIntervalMs = 4000;
           rogueMarkTransferP = 0;
           rogueMarkNextMs = rogueRunMs + rogueMarkIntervalMs;
         } },
-      { desc: ['4초마다 장애물 4개에 표식, 표식당 점수 ', { h: '+2' }, ', 소모 시 ', { h: '35%' }, ' 확률로 표식 전이'],
+      { desc: ['4초마다 장애물 4개에 표식, 표식당 점수 ', { h: '+1.5' }, ', 소모 시 ', { h: '35%' }, ' 확률로 표식 전이'],
         apply() {
           rogueMarkTargets = 4;
-          rogueMarkBonus = 2;
+          rogueMarkBonus = 1.5;
           rogueMarkIntervalMs = 4000;
           rogueMarkTransferP = 0.35;
           rogueMarkNextMs = rogueRunMs + rogueMarkIntervalMs;
@@ -1060,10 +1060,10 @@ const ROGUE_AUGMENTS = [
     levels: [
       { desc: ['득점 배율 ', { h: '0.7~1.5배' }],
         apply() { rogueGambleMin = 0.7; rogueGambleMax = 1.5; } },
-      { desc: ['득점 배율 ', { h: '0.8~1.8배' }],
-        apply() { rogueGambleMin = 0.8; rogueGambleMax = 1.8; } },
-      { desc: ['득점 배율 ', { h: '1~2.2배' }],
-        apply() { rogueGambleMin = 1; rogueGambleMax = 2.2; } }
+      { desc: ['득점 배율 ', { h: '0.8~1.7배' }],
+        apply() { rogueGambleMin = 0.8; rogueGambleMax = 1.7; } },
+      { desc: ['득점 배율 ', { h: '1~2배' }],
+        apply() { rogueGambleMin = 1; rogueGambleMax = 2; } }
     ]
   },
   {
@@ -1163,14 +1163,14 @@ function rogueBuildEnhancedChoice(base, level) {
   if (id === 'bonusobs') {
     if (level === 1) {
       return {
-        desc: [g('21%'), ' 확률로 점수 ', { h: '×2' }, ' 장애물 소환'],
-        apply() { rogueBonusChance += 0.21; rogueBonusMult = 2; }
+        desc: [g('18%'), ' 확률로 점수 ', { h: '×2' }, ' 장애물 소환'],
+        apply() { rogueBonusChance += 0.18; rogueBonusMult = 2; }
       };
     }
     if (level === 2) {
       return {
-        desc: ['소환 확률 ', g('+12%'), ', 점수 배율 ', { h: '×2.5' }],
-        apply() { rogueBonusChance += 0.12; rogueBonusMult = 2.5; }
+        desc: ['소환 확률 ', g('+10%'), ', 점수 배율 ', { h: '×2.5' }],
+        apply() { rogueBonusChance += 0.10; rogueBonusMult = 2.5; }
       };
     }
     return {
