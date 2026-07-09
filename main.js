@@ -58,7 +58,11 @@ function isMobilePortrait() {
 
 function updatePortraitPrompt() {
   const overlay = document.getElementById('portrait-required-overlay');
-  if (overlay) overlay.classList.remove('is-active');
+  if (!overlay) return;
+  // 모바일은 가로(랜드스케이프) 기준으로 UI를 맞춘다.
+  // 세로 모드에서는 안내 오버레이로 가림.
+  if (IS_MOBILE && isMobilePortrait()) overlay.classList.add('is-active');
+  else overlay.classList.remove('is-active');
 }
 
 const LOADING_MIN_MS = 1250;
