@@ -191,6 +191,19 @@
     }
   }
   /* 모바일에서도 패널은 menu-screen과 함께 스케일되어 PC 카드 UI 비율을 유지한다. */
+  /* 모바일(특히 가로모드)에서 vh 기반 높이는 패널이 'ㅡ'처럼 납작해지기 쉬워,
+     menu-screen(1280x720) 기준 px 높이로 고정(→ transform scale로 비율 유지). */
+  html.is-mobile #achievements-panel.is-open,
+  html.is-mobile #menu-customize-panel.is-open,
+  html.is-mobile #menu-quest-panel.is-open,
+  html.is-mobile #menu-gacha-panel.is-open {
+    height: 420px;
+    max-height: 420px;
+  }
+  html.is-mobile #menu-info-panel.is-open {
+    height: 540px;
+    max-height: 540px;
+  }
   #achievements-panel .achievements-scroll,
   #menu-info-panel .menu-info-scroll {
     scrollbar-width: thin;

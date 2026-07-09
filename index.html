@@ -172,6 +172,21 @@
                 <strong class="text-[#a78bfa]">혼돈</strong>: <strong class="text-white">이동</strong>/<strong class="text-white">회전</strong>/<strong class="text-white">장애물 생성</strong>이 일반 대비 <strong class="text-white">+20%</strong> 빠릅니다. 시작 시 <strong class="text-white">랜덤 디버프 3개</strong>가 적용됩니다.<br>
                 <strong class="text-white">이동 장애물</strong> 등장 확률: <strong class="text-white">일반과 동일</strong>(시도 시 기본 <strong class="text-white">15%</strong>, <strong class="text-white">5점마다 +1%p</strong>).<br>
                 <strong class="text-white">해금</strong>: 하드 최고기록 <strong class="text-white">40점</strong> 이상.
+                <details class="mt-2 rounded-xl border border-white/10 px-3 py-2">
+                  <summary class="cursor-pointer select-none text-[12px] font-extrabold text-zinc-200">디버프 목록</summary>
+                  <ul class="mt-2 list-inside list-disc space-y-1.5 text-[12px] leading-snug text-zinc-400">
+                    <li><strong class="text-zinc-200">장애물 간격 감소</strong>: 장애물 간격이 더 촘촘해집니다.</li>
+                    <li><strong class="text-zinc-200">뱀 길이 1.5배</strong>: 시작 뱀 길이가 더 깁니다.</li>
+                    <li><strong class="text-zinc-200">장애물 글리치</strong>: 일부 장애물이 가끔씩 흔들립니다.</li>
+                    <li><strong class="text-zinc-200">이동속도 유동</strong>: 이동 속도가 계속 변합니다.</li>
+                    <li><strong class="text-zinc-200">회전 관성 증가</strong>: 방향 전환이 더 둔하게 느껴집니다.</li>
+                    <li><strong class="text-zinc-200">콤보 유지시간 감소</strong>: 콤보 유지 시간이 짧아집니다.</li>
+                    <li><strong class="text-zinc-200">충돌 판정 강화</strong>: 충돌 판정이 더 엄격해집니다.</li>
+                    <li><strong class="text-zinc-200">기본점수 구간 축소</strong>: 근접 점수의 낮은 구간이 불리해집니다.</li>
+                    <li><strong class="text-zinc-200">안전구역 축소</strong>: 뱀 주변 “장애물 생성 금지” 구역이 줄어듭니다.</li>
+                    <li><strong class="text-zinc-200">이동 장애물 강화</strong>: 이동 장애물이 더 일찍/자주 등장합니다.</li>
+                  </ul>
+                </details>
               </li>
               <li>
                 <strong class="text-[#60a5fa]">멀티플레이</strong>: <strong class="text-white">로컬 2인</strong>(한 PC) 모드입니다. 화이트(A/D), 그레이(←/→)로 조작하며 <strong class="text-white">서로 충돌하지 않습니다</strong>. 점수·장애물 규칙은 <strong class="text-white">일반과 같습니다</strong>.<br>
@@ -180,6 +195,74 @@
               </li>
               <li>
                 <strong class="text-[#4ade80]">연습</strong>: 설정 패널로 <strong class="text-white">속도</strong>/<strong class="text-white">회전</strong>/<strong class="text-white">장애물 생성</strong>/<strong class="text-white">콤보 유지</strong>/<strong class="text-white">무적</strong> 등을 조절하며, 시간 경과에 따른 <strong class="text-white">속도·점수 보너스 증가는 없습니다</strong>. <strong class="text-white">업적/기록</strong>에는 반영되지 않습니다.
+              </li>
+              <li>
+                <strong class="text-[#fbbf24]">로그라이크</strong>: 화면 아래 <strong class="text-white">게이지</strong>가 지속적으로 감소하며, 점수(근접 통과)를 얻으면 <strong class="text-white">게이지가 회복</strong>됩니다. 게이지가 0이 되면 게임 오버입니다.<br>
+                시작 시, 이후 <strong class="text-white">15초마다</strong> 증강 3개 중 1개를 고릅니다. 같은 증강을 다시 고르면 <strong class="text-white">레벨이 올라가</strong> 더 강해집니다.
+                <details class="mt-2 rounded-xl border border-white/10 px-3 py-2">
+                  <summary class="cursor-pointer select-none text-[12px] font-extrabold text-zinc-200">증강 목록</summary>
+                  <div class="mt-2 space-y-3 text-[12px] leading-snug text-zinc-400">
+                    <div>
+                      <div class="font-extrabold text-zinc-200">활력</div>
+                      <div>Lv.1: 최대·현재 게이지 +10</div>
+                      <div>Lv.2: 최대·현재 게이지 +15</div>
+                      <div>Lv.3: 최대·현재 게이지 +25, 게이지 감소 15% 완화</div>
+                    </div>
+                    <div>
+                      <div class="font-extrabold text-zinc-200">예리</div>
+                      <div>Lv.1: 통과 기본 점수 +0.5</div>
+                      <div>Lv.2: 통과 기본 점수 +0.75</div>
+                      <div>Lv.3: 통과 기본 점수 +1.5</div>
+                    </div>
+                    <div>
+                      <div class="font-extrabold text-zinc-200">노다지</div>
+                      <div>Lv.1: 18% 확률로 점수 ×2 장애물 소환</div>
+                      <div>Lv.2: 소환 확률 +10%, 점수 배율 ×2.5</div>
+                      <div>Lv.3: 소환 확률 +12%, 점수 배율 ×3.5</div>
+                    </div>
+                    <div>
+                      <div class="font-extrabold text-zinc-200">질주</div>
+                      <div>Lv.1: 이동 속도 +10%, 장애물 소환 +12%</div>
+                      <div>Lv.2: 이동 속도 +8%, 장애물 소환 +20%</div>
+                      <div>Lv.3: 이동 속도 +14%, 피격 데미지 40% 감소</div>
+                    </div>
+                    <div>
+                      <div class="font-extrabold text-zinc-200">보호막</div>
+                      <div>Lv.1: 선택마다 보호막 2회</div>
+                      <div>Lv.2: 선택마다 보호막 3회</div>
+                      <div>Lv.3: 선택마다 보호막 4회, 소모 시 최대 게이지 10% 회복</div>
+                    </div>
+                    <div>
+                      <div class="font-extrabold text-zinc-200">연계</div>
+                      <div>Lv.1: 콤보 유지시간 +0.75초, 최대 콤보 +1</div>
+                      <div>Lv.2: 최대 콤보 +2</div>
+                      <div>Lv.3: 콤보 유지시간 +0.5초, 콤보당 이동속도 +3%</div>
+                    </div>
+                    <div>
+                      <div class="font-extrabold text-zinc-200">폭파</div>
+                      <div>Lv.1: 피격 시 주변 장애물 소거, 장애물 소환 +20%</div>
+                      <div>Lv.2: 폭파 범위 확대, 장애물 소환 +30%</div>
+                      <div>Lv.3: 폭파 범위 매우 확대, 장애물 소환 +50%</div>
+                    </div>
+                    <div>
+                      <div class="font-extrabold text-zinc-200">도박</div>
+                      <div>Lv.1: 득점 배율 0.7~1.5배</div>
+                      <div>Lv.2: 득점 배율 0.8~1.8배</div>
+                      <div>Lv.3: 득점 배율 1~2.2배</div>
+                    </div>
+                    <div>
+                      <div class="font-extrabold text-zinc-200">유령</div>
+                      <div>Lv.1: 자기 몸 피격 무시, 이동 속도 +15%</div>
+                      <div>Lv.2: 벽 피격 무시, 장애물 소환 +20%</div>
+                      <div>Lv.3: 피격 데미지 20% 감소, 이동 속도 +15%</div>
+                    </div>
+                    <div>
+                      <div class="font-extrabold text-zinc-200">미래</div>
+                      <div>Lv.1: 등장 증강이 각각 25% 확률로 수치 강화</div>
+                      <div>Lv.2: 증강 선택 시 최대 게이지의 25% 회복</div>
+                    </div>
+                  </div>
+                </details>
               </li>
             </ul>
           </div>
