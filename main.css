@@ -190,43 +190,7 @@
       max-height: calc(62vh - 5rem);
     }
   }
-  /* 모바일: 패널은 #menu-screen의 transform: scale 영향권을 받지 않도록
-     JS에서 body 직속으로 옮겨두고, 여기서 실 뷰포트 기준으로 위치/크기를 잡는다. */
-  html.is-mobile #menu-hub-panel,
-  html.is-mobile #achievements-panel,
-  html.is-mobile #menu-customize-panel,
-  html.is-mobile #menu-quest-panel,
-  html.is-mobile #menu-gacha-panel {
-    position: fixed;
-    top: 3.5rem;
-    right: 1rem;
-    z-index: 50;
-    /* 모바일에서는 패널이 실 뷰포트 기준이라 너무 크게 보일 수 있어 전체 스케일 다운 */
-    transform: scale(0.86);
-    transform-origin: top right;
-  }
-  /* 상세정보는 좌상단(원래 위치) */
-  html.is-mobile #menu-info-panel {
-    position: fixed;
-    top: 3.5rem;
-    left: 1rem;
-    z-index: 50;
-    transform: scale(0.86);
-    transform-origin: top left;
-  }
-  html.is-mobile #achievements-panel.is-open,
-  html.is-mobile #menu-info-panel.is-open,
-  html.is-mobile #menu-customize-panel.is-open,
-  html.is-mobile #menu-quest-panel.is-open,
-  html.is-mobile #menu-gacha-panel.is-open {
-    height: calc(42vh - 4.75rem);
-    max-height: calc(42vh - 4.75rem);
-  }
-  /* 상세정보는 내용이 많아서 조금 더 높게 */
-  html.is-mobile #menu-info-panel.is-open {
-    height: calc(52vh - 4.75rem);
-    max-height: calc(52vh - 4.75rem);
-  }
+  /* 모바일에서도 패널은 menu-screen과 함께 스케일되어 PC 카드 UI 비율을 유지한다. */
   #achievements-panel .achievements-scroll,
   #menu-info-panel .menu-info-scroll {
     scrollbar-width: thin;

@@ -5614,12 +5614,8 @@ const menuQuestPanel = document.getElementById('menu-quest-panel');
 // 상세정보는 좌상단으로 분리(허브 아님). 뽑기가 허브 그리드에 들어옴.
 const menuGachaPanel = document.getElementById('menu-gacha-panel');
 
-// 모바일: 허브 패널들 + 상세정보 패널을 body 직속으로(메뉴 transform:scale 영향권 밖). 토글은 메뉴에 유지.
-if (IS_MOBILE) {
-  [menuHubPanel, achievementsPanel, menuCustomizePanel, menuQuestPanel, menuGachaPanel, menuInfoPanel].forEach(p => {
-    if (p && p.parentElement !== document.body) document.body.appendChild(p);
-  });
-}
+// 모바일: 패널도 menu-screen과 함께 스케일(PC 카드 UI 비율 유지)
+// (고정 배치로 빼면 가로/세로 비율이 깨져 'ㅡ'처럼 납작해질 수 있음)
 
 const hubPanels = {
   grid: menuHubPanel,
