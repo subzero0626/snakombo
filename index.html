@@ -198,15 +198,21 @@
                   <div class="mt-2 space-y-3 text-[12px] leading-snug text-zinc-400">
                     <div>
                       <div class="font-extrabold text-zinc-200">활력</div>
-                      <div>Lv.1: 최대·현재 게이지 +10</div>
-                      <div>Lv.2: 최대·현재 게이지 +15</div>
+                      <div>Lv.1: 최대·현재 게이지 +12</div>
+                      <div>Lv.2: 최대·현재 게이지 +18</div>
                       <div>Lv.3: 최대·현재 게이지 +25, 게이지 감소 15% 완화</div>
                     </div>
                     <div>
+                      <div class="font-extrabold text-zinc-200">성장</div>
+                      <div>Lv.1: 장애물 통과 시 20% 확률로 최대 게이지 +1,<br>추가 점수 +1</div>
+                      <div>Lv.2: 장애물 통과 시 30% 확률로 최대 게이지 +1,<br>추가 점수 +1.5</div>
+                      <div>Lv.3: 장애물 통과 시 50% 확률로 최대 게이지 +1,<br>추가 점수 +2</div>
+                    </div>
+                    <div>
                       <div class="font-extrabold text-zinc-200">예리</div>
-                      <div>Lv.1: 통과 기본 점수 +0.5</div>
-                      <div>Lv.2: 통과 기본 점수 +0.75</div>
-                      <div>Lv.3: 통과 기본 점수 +1.5</div>
+                      <div>Lv.1: 통과 기본 점수 +0.6</div>
+                      <div>Lv.2: 통과 기본 점수 +1.2</div>
+                      <div>Lv.3: 통과 기본 점수 +2.4</div>
                     </div>
                     <div>
                       <div class="font-extrabold text-zinc-200">노다지</div>
@@ -249,6 +255,18 @@
                       <div>Lv.1: 득점 배율 0.7~1.5배</div>
                       <div>Lv.2: 득점 배율 0.8~1.7배</div>
                       <div>Lv.3: 득점 배율 1~2배</div>
+                    </div>
+                    <div>
+                      <div class="font-extrabold text-zinc-200">분노</div>
+                      <div>Lv.1: 게이지 25% 이하일 때 모든 점수 1.2배, 피격 피해 15% 감소</div>
+                      <div>Lv.2: 게이지 30% 이하일 때 모든 점수 1.3배, 피격 피해 20% 감소</div>
+                      <div>Lv.3: 게이지 40% 이하일 때 모든 점수 1.5배, 피격 피해 35% 감소</div>
+                    </div>
+                    <div>
+                      <div class="font-extrabold text-zinc-200">역습</div>
+                      <div>Lv.1: 피격 후 1초간 모든 점수 1.3배</div>
+                      <div>Lv.2: 피격 후 1초간 모든 점수 1.7배</div>
+                      <div>Lv.3: 피격 후 1.5초간 모든 점수 2배</div>
                     </div>
                     <div>
                       <div class="font-extrabold text-zinc-200">유령</div>
@@ -664,7 +682,7 @@
           aria-label="모드 전환: 일반, 하드, 혼돈, 연습"
           class="inline-block cursor-pointer select-none text-5xl font-black tracking-tight sm:text-6xl md:text-7xl"
         >
-          <span class="mt-char" style="--mt-i:0">S</span><span class="mt-char" style="--mt-i:1">n</span><span class="mt-char" style="--mt-i:2">a</span><span class="mt-char" style="--mt-i:3">k</span><span class="mt-char" style="--mt-i:4">o</span><span class="mt-char" style="--mt-i:5">m</span><span class="mt-char" style="--mt-i:6">b</span><span class="mt-char" style="--mt-i:7">o</span>
+          <span class="mt-chunk" style="--mt-c:0"><span class="mt-char" style="--mt-i:0">S</span><span class="mt-char" style="--mt-i:1">n</span><span class="mt-char" style="--mt-i:2">a</span></span><span class="mt-chunk" style="--mt-c:1"><span class="mt-char" style="--mt-i:3">k</span><span class="mt-char" style="--mt-i:4">o</span><span class="mt-char" style="--mt-i:5">m</span></span><span class="mt-chunk" style="--mt-c:2"><span class="mt-char" style="--mt-i:6">b</span><span class="mt-char" style="--mt-i:7">o</span></span>
         </h1>
         <div id="menu-title-tooltip" aria-hidden="true">
           <span class="menu-title-tooltip-hint">글자를 클릭해 모드를 고르세요</span>
@@ -849,6 +867,6 @@
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="skins.js?v=20260709-mobileui2" defer></script>
 <script src="online.js?v=20260709-mobileui2" defer></script>
-<script src="main.js?v=20260709-mobileui2" defer></script>
+<script src="main.js?v=20260711-mobilescale" defer></script>
 </body>
 </html>

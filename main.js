@@ -215,16 +215,21 @@ function playMenuDenySound() {
   } catch (_) {}
 }
 
-// 모바일 스케일링 제거: 고정 스케일 1
-const GAME_SCALE = 1;
+// 모바일 가상 캔버스(1280)를 PC 기준(1920) 비율에 맞춰 뱀·장애물 크기 축소
+const DESKTOP_REF_W = 1920;
+const GAME_SCALE = IS_MOBILE ? (MOBILE_VIRTUAL_W / DESKTOP_REF_W) : 1;
 
-const SEGMENT_DIST = 6;
-const HEAD_RADIUS = 8;
-const HEAD_WIDTH = 15.5;
+const SEGMENT_DIST = 6 * GAME_SCALE;
+const HEAD_RADIUS = 8 * GAME_SCALE;
+const HEAD_WIDTH = 15.5 * GAME_SCALE;
 const MIN_GAP = HEAD_WIDTH * 5;
-const SNAKE_SAFE_DIST = 200;
+const SNAKE_SAFE_DIST = 200 * GAME_SCALE;
+/** 장애물 페이드인/아웃 기준 프레임 수(60fps 기준 ≈0.6초) */
+const OBS_FADE_FRAMES = 36;
+/** 떠오르는 +점수 텍스트 수명(60fps 기준 ≈1초) */
+const FLOAT_TEXT_LIFE = 60;
 
-// (모바일 스케일링을 걷어내면서) 기존 코드 호환용: px()는 그대로 두되 1:1로 동작
+// HUD 등 UI는 가상 픽셀 기준 1:1 (월드 스케일과 분리)
 function px(n) {
   return n;
 }
@@ -255,7 +260,7 @@ function resize() {
 const SEGMENTS = 100;
 /** 혼돈 디버프 long_snake: 세그먼트 개수만 1.5배 */
 const SEGMENTS_CHAOS_LONG = 150;
-const SNAKE_START_X_OFFSET = -100;
+const SNAKE_START_X_OFFSET = -100 * GAME_SCALE;
 const points = [];
 
 for (let i = 0; i < SEGMENTS_CHAOS_LONG; i++) {
@@ -267,8 +272,8 @@ function getRunSegmentCount() {
 }
 
 let angle = 0;
-const BASE_SPEED = 4.3;
-const SPEED_INCREMENT = 0.048; // per second (시간 경과 가속 완화, 기본 0.06)
+const BASE_SPEED = 4.3 * GAME_SCALE;
+const SPEED_INCREMENT = 0.048 * GAME_SCALE; // per second (시간 경과 가속 완화, 기본 0.06)
 const COMBO_TIMEOUT_MS = 2000;
 /** 튜토리얼에서만 콤보 유지 제한(초) — 본편은 COMBO_TIMEOUT_MS */
 const TUTORIAL_COMBO_TIMEOUT_MS = 4000;
@@ -644,6 +649,15 @@ let rogueMarkFx = [];                   // {x0,y0,x1,y1,t0,dur} 전이 이펙트
 let rogueMarkSfxLastAt = 0;
 let rogueGambleMin = 1;                 // 증강(도박): 점수 배율 하한
 let rogueGambleMax = 1;                 // 증강(도박): 점수 배율 상한
+let rogueRageThreshold = 0;             // 증강(분노): 발동 게이지 비율(0=비활성, 0.25=25%)
+let rogueRageScoreMult = 1;             // 증강(분노): 발동 시 점수 배율
+let rogueRageHitMult = 1;               // 증강(분노): 발동 시 피격 배율(0.85=15% 감소)
+let rogueCounterDurationMs = 0;         // 증강(역습): 피격 후 점수 배율 지속(ms)
+let rogueCounterMult = 1;               // 증강(역습): 발동 시 점수 배율
+let rogueCounterUntilRunMs = 0;         // 역습 종료 시점(rogueRunMs)
+let rogueGrowthChance = 0;              // 증강(성장): 통과/폭파 시 발동 확률
+let rogueGrowthScore = 0;               // 증강(성장): 발동 시 추가 점수
+let rogueGrowthBonusMax = 0;            // 성장으로 올린 최대 게이지(표시용)
 let rogueGhostSelfImmune = false;       // 증강(유령): 자기몸 피격 무시
 let rogueGhostWallImmune = false;       // 증강(유령): 벽 피격 무시
 let rogueFutureEnhance = false;         // 증강(미래 L1): 드래프트 수치 강화
@@ -679,6 +693,32 @@ function rogueComboSpeedFactor() {
   return 1 + combo * rogueComboSpeedPerStack;
 }
 
+function rogueRageActive() {
+  if (!(rogueRageThreshold > 0) || !(rogueMaxGauge > 0)) return false;
+  return (rogueGauge / rogueMaxGauge) <= rogueRageThreshold + 1e-9;
+}
+
+function rogueCounterActive() {
+  return rogueCounterMult > 1 && rogueRunMs < rogueCounterUntilRunMs;
+}
+
+function rogueActivateCounter() {
+  if (!(rogueCounterDurationMs > 0) || !(rogueCounterMult > 1)) return;
+  rogueCounterUntilRunMs = rogueRunMs + rogueCounterDurationMs;
+}
+
+/** 성장: 장애물 통과/폭파 소거 시 확률로 최대 게이지 +1 및 추가 점수 */
+function rogueTryGrowthOnPass(x, y) {
+  if (!(rogueGrowthChance > 0)) return false;
+  if (Math.random() >= rogueGrowthChance) return false;
+  rogueMaxGauge += 1;
+  rogueGrowthBonusMax += 1;
+  const raw = rogueGrowthScore > 0 ? rogueGrowthScore : 1;
+  const pts = rogueApplyScoreGain(raw);
+  rogueGrantPoints(pts, x, y - 36);
+  return true;
+}
+
 /** 로그라이크 점수: 소수 둘째 자리 이상을 첫째 자리로 올림 (1.45 → 1.5) */
 function rogueCeil1(n) {
   return Math.ceil(n * 10 - 1e-9) / 10;
@@ -690,6 +730,8 @@ function rogueApplyScoreGain(rawPts) {
     const mult = rogueGambleMin + Math.random() * Math.max(0, rogueGambleMax - rogueGambleMin);
     pts *= mult;
   }
+  if (rogueRageActive() && rogueRageScoreMult > 1) pts *= rogueRageScoreMult;
+  if (rogueCounterActive()) pts *= rogueCounterMult;
   return rogueCeil1(pts);
 }
 
@@ -700,16 +742,14 @@ function rogueGrantPoints(pts, x, y, color) {
   floatingTexts.push({
     x: x, y: y,
     text: '+' + pts,
-    life: 60,
+    life: FLOAT_TEXT_LIFE,
     color: color || [255, 255, 255]
   });
 }
 
-/** 로그라이크: 장애물을 가장 가까이 통과했을 때 받는 기본 최고점 */
+/** 로그라이크: 장애물을 가장 가까이 통과했을 때 받는 기본 최고점(노다지 전) */
 function rogueMaxClosePtsForObs(obs) {
-  let base = 4 + rogueBaseScoreBonus;
-  if (obs && obs.isRogueBonus && rogueBonusMult > 1) base *= rogueBonusMult;
-  return base;
+  return 4 + rogueBaseScoreBonus;
 }
 
 /** 폭파: 중심 주변 장애물 소거 후, 각 장애물의 최근접 최고점으로 점수 지급 + 원형 이펙트 */
@@ -727,9 +767,25 @@ function rogueTriggerBlast(cx, cy) {
     const dx = o.x - cx;
     const dy = o.y - cy;
     if (dx * dx + dy * dy <= rogueBlastRadius * rogueBlastRadius) {
-      o.fadeOut = 36;
-      rawTotal += rogueMaxClosePtsForObs(o);
+      // 통과 점수와 동일: 기본(+예리) + 표식 → 노다지 → (합산 후) 도박
+      let pts = rogueMaxClosePtsForObs(o);
+      if (rogueMarkBonus > 0) {
+        const m = o.rogueMark || 0;
+        if (m > 0) {
+          pts += m * rogueMarkBonus;
+          o.rogueMark = 0;
+          for (let k = 0; k < m; k++) {
+            if (rogueMarkTransferP > 0 && Math.random() < rogueMarkTransferP) {
+              rogueTryTransferMark(o);
+            }
+          }
+        }
+      }
+      if (o.isRogueBonus && rogueBonusMult > 1) pts *= rogueBonusMult;
+      o.fadeOut = OBS_FADE_FRAMES;
+      rawTotal += pts;
       cleared++;
+      rogueTryGrowthOnPass(o.x, o.y);
     }
   }
   if (cleared <= 0 || !(rawTotal > 0)) return;
@@ -776,6 +832,15 @@ function resetRogueState() {
   rogueMarkSfxLastAt = 0;
   rogueGambleMin = 1;
   rogueGambleMax = 1;
+  rogueRageThreshold = 0;
+  rogueRageScoreMult = 1;
+  rogueRageHitMult = 1;
+  rogueCounterDurationMs = 0;
+  rogueCounterMult = 1;
+  rogueCounterUntilRunMs = 0;
+  rogueGrowthChance = 0;
+  rogueGrowthScore = 0;
+  rogueGrowthBonusMax = 0;
   rogueGhostSelfImmune = false;
   rogueGhostWallImmune = false;
   rogueFutureEnhance = false;
@@ -948,10 +1013,10 @@ const ROGUE_AUGMENTS = [
   {
     id: 'gauge', cat: 'heal', name: '활력',
     levels: [
-      { desc: ['최대·현재 게이지 ', { h: '+10' }],
-        apply() { rogueMaxGauge += 10; rogueGauge = Math.min(rogueMaxGauge, rogueGauge + 10); } },
-      { desc: ['최대·현재 게이지 ', { h: '+15' }],
-        apply() { rogueMaxGauge += 15; rogueGauge = Math.min(rogueMaxGauge, rogueGauge + 15); } },
+      { desc: ['최대·현재 게이지 ', { h: '+12' }],
+        apply() { rogueMaxGauge += 12; rogueGauge = Math.min(rogueMaxGauge, rogueGauge + 12); } },
+      { desc: ['최대·현재 게이지 ', { h: '+18' }],
+        apply() { rogueMaxGauge += 18; rogueGauge = Math.min(rogueMaxGauge, rogueGauge + 18); } },
       { desc: ['최대·현재 게이지 ', { h: '+25' }, ', 게이지 감소 ', { h: '15% 완화' }],
         apply() {
           rogueMaxGauge += 25;
@@ -961,14 +1026,25 @@ const ROGUE_AUGMENTS = [
     ]
   },
   {
+    id: 'growth', cat: 'heal', name: '성장',
+    levels: [
+      { desc: ['장애물 통과 시 ', { h: '20%' }, ' 확률로 최대 게이지 ', { h: '+1' }, '\n', '추가 점수 ', { h: '+1' }],
+        apply() { rogueGrowthChance = 0.20; rogueGrowthScore = 1; } },
+      { desc: ['장애물 통과 시 ', { h: '30%' }, ' 확률로 최대 게이지 ', { h: '+1' }, '\n', '추가 점수 ', { h: '+1.5' }],
+        apply() { rogueGrowthChance = 0.30; rogueGrowthScore = 1.5; } },
+      { desc: ['장애물 통과 시 ', { h: '50%' }, ' 확률로 최대 게이지 ', { h: '+1' }, '\n', '추가 점수 ', { h: '+2' }],
+        apply() { rogueGrowthChance = 0.50; rogueGrowthScore = 2; } }
+    ]
+  },
+  {
     id: 'score', cat: 'offense', name: '예리',
     levels: [
-      { desc: ['통과 기본 점수 ', { h: '+0.5' }],
-        apply() { rogueBaseScoreBonus += 0.5; } },
-      { desc: ['통과 기본 점수 ', { h: '+0.75' }],
-        apply() { rogueBaseScoreBonus += 0.75; } },
-      { desc: ['통과 기본 점수 ', { h: '+1.5' }],
-        apply() { rogueBaseScoreBonus += 1.5; } }
+      { desc: ['통과 기본 점수 ', { h: '+0.6' }],
+        apply() { rogueBaseScoreBonus += 0.6; } },
+      { desc: ['통과 기본 점수 ', { h: '+1.2' }],
+        apply() { rogueBaseScoreBonus += 1.2; } },
+      { desc: ['통과 기본 점수 ', { h: '+2.4' }],
+        apply() { rogueBaseScoreBonus += 2.4; } }
     ]
   },
   {
@@ -1050,9 +1126,9 @@ const ROGUE_AUGMENTS = [
       { desc: ['피격 시 주변 장애물 소거, 장애물 소환 ', { h: '+25%' }],
         apply() { rogueBlastRadius = HEAD_WIDTH * 21; rogueSpawnMult += 0.25; } },
       { desc: ['폭파 범위 ', { h: '확대' }, ', 장애물 소환 ', { h: '+35%' }],
-        apply() { rogueBlastRadius = HEAD_WIDTH * 29; rogueSpawnMult += 0.10; } },
+        apply() { rogueBlastRadius = HEAD_WIDTH * 27; rogueSpawnMult += 0.10; } },
       { desc: ['폭파 범위 ', { h: '매우 확대' }, ', 장애물 소환 ', { h: '+55%' }],
-        apply() { rogueBlastRadius = HEAD_WIDTH * 39; rogueSpawnMult += 0.20; } }
+        apply() { rogueBlastRadius = HEAD_WIDTH * 35; rogueSpawnMult += 0.20; } }
     ]
   },
   {
@@ -1064,6 +1140,28 @@ const ROGUE_AUGMENTS = [
         apply() { rogueGambleMin = 0.8; rogueGambleMax = 1.7; } },
       { desc: ['득점 배율 ', { h: '1~2배' }],
         apply() { rogueGambleMin = 1; rogueGambleMax = 2; } }
+    ]
+  },
+  {
+    id: 'rage', cat: 'offense', name: '분노',
+    levels: [
+      { desc: ['게이지 ', { h: '25%' }, ' 이하일 때 모든 점수 ', { h: '1.2배' }, ', 피격 피해 ', { h: '15% 감소' }],
+        apply() { rogueRageThreshold = 0.25; rogueRageScoreMult = 1.2; rogueRageHitMult = 0.85; } },
+      { desc: ['게이지 ', { h: '30%' }, ' 이하일 때 모든 점수 ', { h: '1.3배' }, ', 피격 피해 ', { h: '20% 감소' }],
+        apply() { rogueRageThreshold = 0.30; rogueRageScoreMult = 1.3; rogueRageHitMult = 0.80; } },
+      { desc: ['게이지 ', { h: '40%' }, ' 이하일 때 모든 점수 ', { h: '1.5배' }, ', 피격 피해 ', { h: '35% 감소' }],
+        apply() { rogueRageThreshold = 0.40; rogueRageScoreMult = 1.5; rogueRageHitMult = 0.65; } }
+    ]
+  },
+  {
+    id: 'counter', cat: 'offense', name: '역습',
+    levels: [
+      { desc: ['피격 후 ', { h: '1초' }, '간 모든 점수 ', { h: '1.3배' }],
+        apply() { rogueCounterDurationMs = 1000; rogueCounterMult = 1.3; } },
+      { desc: ['피격 후 ', { h: '1초' }, '간 모든 점수 ', { h: '1.7배' }],
+        apply() { rogueCounterDurationMs = 1000; rogueCounterMult = 1.7; } },
+      { desc: ['피격 후 ', { h: '1.5초' }, '간 모든 점수 ', { h: '2배' }],
+        apply() { rogueCounterDurationMs = 1500; rogueCounterMult = 2; } }
     ]
   },
   {
@@ -1099,12 +1197,15 @@ function rogueAugmentCanEnhance(base, level) {
   if (level < 1 || level > (base.levels ? base.levels.length : 0)) return false;
   return (
     id === 'gauge' ||
+    id === 'growth' ||
     id === 'score' ||
     id === 'bonusobs' ||
     id === 'speed' ||
     id === 'combo' ||
     id === 'blast' ||
-    id === 'ghost'
+    id === 'ghost' ||
+    id === 'rage' ||
+    id === 'counter'
   );
 }
 
@@ -1120,14 +1221,14 @@ function rogueBuildEnhancedChoice(base, level) {
   if (id === 'gauge') {
     if (level === 1) {
       return {
-        desc: ['최대·현재 게이지 ', g('+12')],
-        apply() { rogueMaxGauge += 12; rogueGauge = Math.min(rogueMaxGauge, rogueGauge + 12); }
+        desc: ['최대·현재 게이지 ', g('+14')],
+        apply() { rogueMaxGauge += 14; rogueGauge = Math.min(rogueMaxGauge, rogueGauge + 14); }
       };
     }
     if (level === 2) {
       return {
-        desc: ['최대·현재 게이지 ', g('+18')],
-        apply() { rogueMaxGauge += 18; rogueGauge = Math.min(rogueMaxGauge, rogueGauge + 18); }
+        desc: ['최대·현재 게이지 ', g('+22')],
+        apply() { rogueMaxGauge += 22; rogueGauge = Math.min(rogueMaxGauge, rogueGauge + 22); }
       };
     }
     // L3: +25→+30, 감소 15% 완화는 고유(유지)
@@ -1141,22 +1242,42 @@ function rogueBuildEnhancedChoice(base, level) {
     };
   }
 
-  if (id === 'score') {
+  if (id === 'growth') {
+    // 미래 강화: 확률만 소폭(+2/+3/+4%p), 추가 점수는 기본과 동일
     if (level === 1) {
       return {
-        desc: ['통과 기본 점수 ', g('+0.6')],
-        apply() { rogueBaseScoreBonus += 0.6; }
+        desc: ['장애물 통과 시 ', g('22%'), ' 확률로 최대 게이지 ', { h: '+1' }, '\n', '추가 점수 ', { h: '+1' }],
+        apply() { rogueGrowthChance = 0.22; rogueGrowthScore = 1; }
       };
     }
     if (level === 2) {
       return {
-        desc: ['통과 기본 점수 ', g('+0.9')],
-        apply() { rogueBaseScoreBonus += 0.9; }
+        desc: ['장애물 통과 시 ', g('33%'), ' 확률로 최대 게이지 ', { h: '+1' }, '\n', '추가 점수 ', { h: '+1.5' }],
+        apply() { rogueGrowthChance = 0.33; rogueGrowthScore = 1.5; }
       };
     }
     return {
-      desc: ['통과 기본 점수 ', g('+1.8')],
-      apply() { rogueBaseScoreBonus += 1.8; }
+      desc: ['장애물 통과 시 ', g('54%'), ' 확률로 최대 게이지 ', { h: '+1' }, '\n', '추가 점수 ', { h: '+2' }],
+      apply() { rogueGrowthChance = 0.54; rogueGrowthScore = 2; }
+    };
+  }
+
+  if (id === 'score') {
+    if (level === 1) {
+      return {
+        desc: ['통과 기본 점수 ', g('+0.7')],
+        apply() { rogueBaseScoreBonus += 0.7; }
+      };
+    }
+    if (level === 2) {
+      return {
+        desc: ['통과 기본 점수 ', g('+1.4')],
+        apply() { rogueBaseScoreBonus += 1.4; }
+      };
+    }
+    return {
+      desc: ['통과 기본 점수 ', g('+2.9')],
+      apply() { rogueBaseScoreBonus += 2.9; }
     };
   }
 
@@ -1237,12 +1358,12 @@ function rogueBuildEnhancedChoice(base, level) {
     if (level === 2) {
       return {
         desc: ['폭파 범위 ', { h: '확대' }, ', 장애물 소환 ', g('+12%')],
-        apply() { rogueBlastRadius = HEAD_WIDTH * 29; rogueSpawnMult += 0.12; }
+        apply() { rogueBlastRadius = HEAD_WIDTH * 27; rogueSpawnMult += 0.12; }
       };
     }
     return {
       desc: ['폭파 범위 ', { h: '매우 확대' }, ', 장애물 소환 ', g('+24%')],
-      apply() { rogueBlastRadius = HEAD_WIDTH * 39; rogueSpawnMult += 0.24; }
+      apply() { rogueBlastRadius = HEAD_WIDTH * 35; rogueSpawnMult += 0.24; }
     };
   }
 
@@ -1263,6 +1384,44 @@ function rogueBuildEnhancedChoice(base, level) {
     return {
       desc: ['피격 데미지 ', { h: '20% 감소' }, ', 이동 속도 ', g('+18%')],
       apply() { rogueHitPenaltyMult *= 0.8; rogueSpeedMult += 0.18; }
+    };
+  }
+
+  if (id === 'rage') {
+    if (level === 1) {
+      return {
+        desc: ['게이지 ', g('30%'), ' 이하일 때 모든 점수 ', g('1.4배'), ', 피격 피해 ', g('18% 감소')],
+        apply() { rogueRageThreshold = 0.30; rogueRageScoreMult = 1.4; rogueRageHitMult = 0.82; }
+      };
+    }
+    if (level === 2) {
+      return {
+        desc: ['게이지 ', g('36%'), ' 이하일 때 모든 점수 ', g('1.6배'), ', 피격 피해 ', g('24% 감소')],
+        apply() { rogueRageThreshold = 0.36; rogueRageScoreMult = 1.6; rogueRageHitMult = 0.76; }
+      };
+    }
+    return {
+      desc: ['게이지 ', g('48%'), ' 이하일 때 모든 점수 ', g('1.8배'), ', 피격 피해 ', g('42% 감소')],
+      apply() { rogueRageThreshold = 0.48; rogueRageScoreMult = 1.8; rogueRageHitMult = 0.58; }
+    };
+  }
+
+  if (id === 'counter') {
+    if (level === 1) {
+      return {
+        desc: ['피격 후 ', g('1.2초'), '간 모든 점수 ', g('1.4배')],
+        apply() { rogueCounterDurationMs = 1200; rogueCounterMult = 1.4; }
+      };
+    }
+    if (level === 2) {
+      return {
+        desc: ['피격 후 ', g('1.2초'), '간 모든 점수 ', g('1.9배')],
+        apply() { rogueCounterDurationMs = 1200; rogueCounterMult = 1.9; }
+      };
+    }
+    return {
+      desc: ['피격 후 ', g('1.8초'), '간 모든 점수 ', g('2.2배')],
+      apply() { rogueCounterDurationMs = 1800; rogueCounterMult = 2.2; }
     };
   }
 
@@ -1438,13 +1597,16 @@ function rogueDamage(blastX, blastY) {
   rogueBreakCombo();
   // 시작 첫 증강은 피격 스택에 미포함 → max(0, pickCount-1)
   const pressurePicks = Math.max(0, roguePickCount - 1);
-  const dmg = Math.max(1, Math.round((ROGUE_HIT_BASE + pressurePicks * ROGUE_HIT_PER_PICK) * rogueHitPenaltyMult));
+  let hitMult = rogueHitPenaltyMult;
+  if (rogueRageActive() && rogueRageHitMult < 1) hitMult *= rogueRageHitMult;
+  const dmg = Math.max(1, Math.round((ROGUE_HIT_BASE + pressurePicks * ROGUE_HIT_PER_PICK) * hitMult));
   rogueGauge -= dmg;
+  rogueActivateCounter();
   rogueHitFlashUntil = performance.now() + 260;
   floatingTexts.push({
     x: points[0].x, y: points[0].y - 24,
     text: '-' + dmg,
-    life: 60, color: [248, 113, 113]
+    life: FLOAT_TEXT_LIFE, color: [248, 113, 113]
   });
   try { playMenuDenySound(); } catch (_) {}
   if (rogueBlastRadius > 0) {
@@ -1467,6 +1629,7 @@ function rogueConsumeShield(fxText, blastX, blastY) {
     // rogueShieldHeal은 최대 체력 대비 비율
     rogueGauge = Math.min(rogueMaxGauge, rogueGauge + rogueMaxGauge * rogueShieldHeal);
   }
+  rogueActivateCounter();
   rogueHitFlashUntil = performance.now() + 160;
   floatingTexts.push({
     x: points[0].x, y: points[0].y - 24,
@@ -1487,7 +1650,7 @@ function rogueApplyHitObstacle(obs) {
   // 보호막이 있으면 1회 흡수(데미지 없음) — 폭파는 보호막으로 막혀도 발동
   if (!rogueConsumeShield('보호막', obs.x, obs.y)) rogueDamage(obs.x, obs.y);
   // 폭파 점수 계산에 충돌 장애물이 포함되도록, 처리 후에 fadeOut 처리
-  obs.fadeOut = 36;
+  obs.fadeOut = OBS_FADE_FRAMES;
 }
 
 // 자기 몸 충돌: 리스폰 없이 체력만 깎고 그대로 통과(짧은 무적으로 중복 방지)
@@ -1658,18 +1821,29 @@ function drawRogueHud(ctx) {
   // 채움(회색, 흐리게)
   ctx.fillStyle = 'rgba(185,185,190,0.45)';
   rogueRoundRect(ctx, x, y, barW * ratio, barH, barH / 2); ctx.fill();
-  // 현재 체력 숫자: 게이지 오른쪽 아래에 작게
-  const num = '' + Math.ceil(rogueGauge);
+  // 현재 체력 숫자: 게이지 오른쪽 아래. 성장 보너스 있으면 "50 + 3"(오른쪽 파랑=추가 최대)
+  const curNum = '' + Math.ceil(rogueGauge);
+  const growthBonus = Math.max(0, rogueGrowthBonusMax | 0);
+  const bonusStr = growthBonus > 0 ? ('' + growthBonus) : '';
   ctx.textAlign = 'right';
   ctx.textBaseline = 'top';
   ctx.font = `800 ${px(13)}px Nunito, sans-serif`;
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
   const numRight = x + barW - px(10);
   const numTop = y + barH + px(8);
-  ctx.fillText(num, numRight, numTop);
+  let cursorRight = numRight;
+  if (bonusStr) {
+    ctx.fillStyle = 'rgba(96, 165, 250, 0.95)'; // blue-400
+    ctx.fillText(bonusStr, cursorRight, numTop);
+    cursorRight -= ctx.measureText(bonusStr).width + px(4);
+    ctx.fillText('+', cursorRight, numTop);
+    cursorRight -= ctx.measureText('+').width + px(4);
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.fillText(curNum, cursorRight, numTop);
   // 무적(보호막) 카운트: 체력 숫자 왼쪽에 금색 원(잔여=채움, 소진=외곽선)
   if (rogueShieldMax > 0) {
-    const numW = ctx.measureText(num).width;
+    const plusW = bonusStr ? (ctx.measureText('+').width + px(8)) : 0;
+    const numW = ctx.measureText(curNum).width + (bonusStr ? (ctx.measureText(bonusStr).width + px(4) + plusW) : 0);
     const r = px(5);
     const gap = px(4);
     const pipCy = numTop + px(6);
@@ -1749,12 +1923,25 @@ function drawRogueAugmentIcons(ctx) {
 function rogueDrawRichText(ctx, tokens, cx, topY, maxW, lineH, size) {
   const hlFont = `900 ${size}px Nunito, sans-serif`;
   const normalFont = `600 ${size}px Nunito, sans-serif`;
-  const segs = tokens.map(tk => (typeof tk === 'object')
-    ? { t: tk.h, h: true, gold: !!tk.gold } : { t: tk, h: false, gold: false });
+  const segs = [];
+  for (const tk of tokens) {
+    if (tk === '\n' || (typeof tk === 'object' && tk && tk.br)) {
+      segs.push({ t: '\n', h: false, gold: false, br: true });
+      continue;
+    }
+    if (typeof tk === 'object') segs.push({ t: tk.h, h: true, gold: !!tk.gold });
+    else segs.push({ t: tk, h: false, gold: false });
+  }
   const measure = (s) => { ctx.font = s.h ? hlFont : normalFont; return ctx.measureText(s.t).width; };
   const lines = [];
   let cur = [], curW = 0;
   for (const s of segs) {
+    if (s.br) {
+      lines.push({ segs: cur, w: curW });
+      cur = [];
+      curW = 0;
+      continue;
+    }
     const w = measure(s);
     if (curW + w > maxW && cur.length) { lines.push({ segs: cur, w: curW }); cur = []; curW = 0; }
     cur.push({ t: s.t, h: s.h, gold: s.gold, w });
@@ -2050,9 +2237,10 @@ function drawChaosVisionTunnel(ctx) {
   const head = points && points[0];
   if (!head) return;
 
-  // "폭파 2렙 정도" ≈ HEAD_WIDTH * 29
+  // PC와 같은 화면 비율: HEAD_WIDTH가 GAME_SCALE 반영됨
+  // 모바일에서 시야가 과하게 넓지 않도록 가장자리 페더도 스케일
   const rCore = HEAD_WIDTH * 29;
-  const rEdge = rCore + 130;
+  const rEdge = rCore + 130 * GAME_SCALE;
 
   ctx.save();
   // 바깥은 아주 흐릿하게(어둡게) — 완전 마스킹은 하지 않음
@@ -2563,7 +2751,7 @@ function pushObstacleAt(x, y, circles, extra) {
     x,
     y,
     circles,
-    fadeIn: 36,
+    fadeIn: OBS_FADE_FRAMES,
     _gid: Math.random() * 1e9,
     isGolden,
     isRogueBonus,
@@ -2574,6 +2762,34 @@ function pushObstacleAt(x, y, circles, extra) {
     _chaosGlitchTarget: chaosHasDebuff('obs_glitch') ? Math.random() < 1 / 3 : false,
     ...extra
   });
+}
+
+function obstacleDrawAlpha(obs) {
+  if (!obs) return 1;
+  if (obs.fadeOut > 0) return Math.max(0, obs.fadeOut) / OBS_FADE_FRAMES;
+  if (obs.fadeIn > 0) return 1 - Math.max(0, obs.fadeIn) / OBS_FADE_FRAMES;
+  return 1;
+}
+
+/** 페이드 진행을 시간 기반으로 갱신(주사율 무관). 제거된 장애물 수를 반환 */
+function tickObstacleFades(frameFactor, shouldTick) {
+  if (!shouldTick || !(frameFactor > 0)) return 0;
+  let removed = 0;
+  for (let i = staticObs.length - 1; i >= 0; i--) {
+    const obs = staticObs[i];
+    if (!obs) continue;
+    if (obs.fadeOut > 0) {
+      obs.fadeOut -= frameFactor;
+      if (obs.fadeOut <= 0) {
+        staticObs.splice(i, 1);
+        removed++;
+      }
+    } else if (obs.fadeIn > 0) {
+      obs.fadeIn -= frameFactor;
+      if (obs.fadeIn < 0) obs.fadeIn = 0;
+    }
+  }
+  return removed;
 }
 
 function findObstacleSpawnPosition(circles, minGapToObs) {
@@ -2597,7 +2813,7 @@ function findObstacleSpawnPosition(circles, minGapToObs) {
       }
     : null;
   const safeDist =
-    chaosHasDebuff('small_safe_zone') ? Math.max(70, SNAKE_SAFE_DIST * 0.42) : SNAKE_SAFE_DIST;
+    chaosHasDebuff('small_safe_zone') ? Math.max(70 * GAME_SCALE, SNAKE_SAFE_DIST * 0.42) : SNAKE_SAFE_DIST;
 
   for (let attempt = 0; attempt < 20; attempt++) {
     const x = -minX + pad + Math.random() * (canvas.width - (maxX - minX) - pad * 2);
@@ -4468,7 +4684,7 @@ function animate() {
                 // tutorial step2 uses a single counter regardless of snake
                 if (tutorialMode && tutorialStep === 2) {
                   tutorialS2_passCount++;
-                  obs.fadeOut = 36;
+                  obs.fadeOut = OBS_FADE_FRAMES;
                 } else {
                   const lastT = isGray ? localLastScoreTimeGray : lastScoreTime;
                   const timedOut = lastT > 0 && (nowMs - lastT) > comboLimitMs;
@@ -4500,7 +4716,7 @@ function animate() {
                         floatingTexts.push({
                           x: hx, y: hy - 20,
                           text: '+' + pts,
-                          life: 60,
+                          life: FLOAT_TEXT_LIFE,
                           color: [120, 120, 120]
                         });
                       }
@@ -4536,6 +4752,7 @@ function animate() {
                         score += pts;
                         if (isRogue()) {
                           rogueGauge = Math.min(rogueMaxGauge, rogueGauge + pts * rogueHealMult);
+                          rogueTryGrowthOnPass(hx, hy);
                         }
                         if (
                           localPlayEnabled &&
@@ -4574,11 +4791,11 @@ function animate() {
                         floatingTexts.push({
                           x: hx, y: hy - 20,
                           text: '+' + pts,
-                          life: 60
+                          life: FLOAT_TEXT_LIFE
                         });
                       }
                     }
-                    obs.fadeOut = 36;
+                    obs.fadeOut = OBS_FADE_FRAMES;
                   }
                 }
               }
@@ -4713,24 +4930,12 @@ function animate() {
 
   // Draw obstacles (cached metaball blobs) with fade-in/out
   // Golden / moving obstacles are drawn later (above the player).
+  // 페이드는 프레임이 아니라 시간(frameFactor) 기준으로 한 번만 갱신
+  tickObstacleFades(frameFactor, playing);
   for (let i = staticObs.length - 1; i >= 0; i--) {
     const obs = staticObs[i];
     if (obs && (obs.isGolden || obs.isMoving)) continue;
-    if (obs.fadeOut > 0) {
-      ctx.globalAlpha = obs.fadeOut / 36;
-      if (playing) {
-        obs.fadeOut--;
-        if (obs.fadeOut <= 0) {
-          staticObs.splice(i, 1);
-          continue;
-        }
-      }
-    } else if (obs.fadeIn > 0) {
-      ctx.globalAlpha = 1 - (obs.fadeIn / 36);
-      if (playing) obs.fadeIn--;
-    } else {
-      ctx.globalAlpha = 1;
-    }
+    ctx.globalAlpha = obstacleDrawAlpha(obs);
     if (chaosHasDebuff('obs_glitch') && obs._chaosGlitchTarget) {
       const tick = ((performance.now() / 90) | 0) * 9973;
       const r = chaosHash01((obs._gid || 0) + tick);
@@ -4808,21 +5013,7 @@ function animate() {
   for (let i = staticObs.length - 1; i >= 0; i--) {
     const obs = staticObs[i];
     if (!obs || !obs.isGolden) continue;
-    if (obs.fadeOut > 0) {
-      ctx.globalAlpha = obs.fadeOut / 36;
-      if (playing) {
-        obs.fadeOut--;
-        if (obs.fadeOut <= 0) {
-          staticObs.splice(i, 1);
-          continue;
-        }
-      }
-    } else if (obs.fadeIn > 0) {
-      ctx.globalAlpha = 1 - (obs.fadeIn / 36);
-      if (playing) obs.fadeIn--;
-    } else {
-      ctx.globalAlpha = 1;
-    }
+    ctx.globalAlpha = obstacleDrawAlpha(obs);
     // no special glitch handling for golden: keep it stable/clear
     drawMetaballObstacle(obs);
     drawRogueMarkIndicator(ctx, obs);
@@ -4833,21 +5024,7 @@ function animate() {
   for (let i = staticObs.length - 1; i >= 0; i--) {
     const obs = staticObs[i];
     if (!obs || !obs.isMoving || obs.isGolden) continue;
-    if (obs.fadeOut > 0) {
-      ctx.globalAlpha = obs.fadeOut / 36;
-      if (playing) {
-        obs.fadeOut--;
-        if (obs.fadeOut <= 0) {
-          staticObs.splice(i, 1);
-          continue;
-        }
-      }
-    } else if (obs.fadeIn > 0) {
-      ctx.globalAlpha = 1 - (obs.fadeIn / 36);
-      if (playing) obs.fadeIn--;
-    } else {
-      ctx.globalAlpha = 1;
-    }
+    ctx.globalAlpha = obstacleDrawAlpha(obs);
     drawMetaballObstacle(obs);
     drawRogueMarkIndicator(ctx, obs);
     ctx.globalAlpha = 1;
@@ -5006,11 +5183,12 @@ function animate() {
   for (let i = floatingTexts.length - 1; i >= 0; i--) {
     const ft = floatingTexts[i];
     if (playing) {
-      ft.y -= 1;
-      ft.life--;
+      // 60fps 기준(1px/프레임, life 60≈1초)을 시간 기반으로 환산 → 주사율 무관
+      ft.y -= frameFactor;
+      ft.life -= frameFactor;
     }
     ctx.font = '700 16px Nunito, sans-serif';
-    const a = ft.life / 60;
+    const a = Math.max(0, ft.life / FLOAT_TEXT_LIFE);
     const c = ft.color;
     if (c && c.length === 3) ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${a})`;
     else ctx.fillStyle = `rgba(255,255,255,${a})`;
@@ -5788,11 +5966,34 @@ function stopMenuTitleRogueWaveLoop() {
   }
 }
 
+function ensureMenuTitleRogueChunks() {
+  if (!menuTitle) return;
+  if (menuTitle.querySelector('.mt-chunk')) return;
+  const chars = Array.from(menuTitle.querySelectorAll('.mt-char'));
+  if (chars.length < 8) return;
+  // sna / kom / bo
+  const groups = [
+    chars.slice(0, 3),
+    chars.slice(3, 6),
+    chars.slice(6, 8)
+  ];
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < groups.length; i++) {
+    const chunk = document.createElement('span');
+    chunk.className = 'mt-chunk';
+    chunk.style.setProperty('--mt-c', String(i));
+    for (const ch of groups[i]) chunk.appendChild(ch);
+    frag.appendChild(chunk);
+  }
+  menuTitle.appendChild(frag);
+}
+
 function fireMenuTitleRogueWave() {
   if (!menuTitle) return;
   if (gameMode !== 'roguelike') return;
   if (menuScreen && menuScreen.classList.contains('hidden')) return;
   if (menuTitle.classList.contains('menu-title-locked')) return;
+  ensureMenuTitleRogueChunks();
   const chunks = menuTitle.querySelectorAll('.mt-chunk');
   if (!chunks.length) return;
   // 위·아래·위 또는 아래·위·아래 + 아주 작은 좌우(대각선)
@@ -5816,6 +6017,7 @@ function fireMenuTitleRogueWave() {
 function startMenuTitleRogueWaveLoop() {
   stopMenuTitleRogueWaveLoop();
   if (!menuTitle || gameMode !== 'roguelike') return;
+  ensureMenuTitleRogueChunks();
   const schedule = () => {
     const wait = 3200 + Math.random() * 3800; // 3.2~7초
     menuTitleRogueWaveTimerId = setTimeout(() => {
