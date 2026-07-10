@@ -532,6 +532,8 @@ let consecutiveExactSevenGames = 0;
 let consecutiveSquareScoreGames = 0;
 /** 본편 한 판에서 움직이는 장애물 연속 통과 횟수 (무브먼트) */
 let consecutiveMovingObsPasses = 0;
+/** 로그라이크: 한 장애물에서 한 번에 얻은 최대 점수 (인생은 한방) */
+let rogueMaxSingleObsPtsThisRun = 0;
 let practicePlayMsSession = 0;
 let practicePlayMsLastSaveAt = 0;
 /** 본편: 첫 점수 획득 시 고정된 반(왼/오), 통행금지 업적 */
@@ -852,6 +854,7 @@ function resetRogueState() {
   rogueLastUpgradableId = null;
   rogueHitFlashUntil = 0;
   rogueBlastFx = [];
+  rogueMaxSingleObsPtsThisRun = 0;
 }
 
 function rogueMarkEligibleObstacles() {
@@ -1025,12 +1028,12 @@ const ROGUE_AUGMENTS = [
   {
     id: 'growth', cat: 'heal', name: '성장',
     levels: [
-      { desc: ['장애물 통과 시 ', { h: '20%' }, ' 확률로 최대 게이지 ', { h: '+1' }, '\n', '추가 점수 ', { h: '+1' }],
-        apply() { rogueGrowthChance = 0.20; rogueGrowthScore = 1; } },
-      { desc: ['장애물 통과 시 ', { h: '30%' }, ' 확률로 최대 게이지 ', { h: '+1' }, '\n', '추가 점수 ', { h: '+1.5' }],
-        apply() { rogueGrowthChance = 0.30; rogueGrowthScore = 1.5; } },
-      { desc: ['장애물 통과 시 ', { h: '50%' }, ' 확률로 최대 게이지 ', { h: '+1' }, '\n', '추가 점수 ', { h: '+2' }],
-        apply() { rogueGrowthChance = 0.50; rogueGrowthScore = 2; } }
+      { desc: ['장애물 통과 시 ', { h: '25%' }, ' 확률로 최대 게이지 ', { h: '+1' }, '\n', '추가 점수 ', { h: '+1' }],
+        apply() { rogueGrowthChance = 0.25; rogueGrowthScore = 1; } },
+      { desc: ['장애물 통과 시 ', { h: '35%' }, ' 확률로 최대 게이지 ', { h: '+1' }, '\n', '추가 점수 ', { h: '+1.5' }],
+        apply() { rogueGrowthChance = 0.35; rogueGrowthScore = 1.5; } },
+      { desc: ['장애물 통과 시 ', { h: '55%' }, ' 확률로 최대 게이지 ', { h: '+1' }, '\n', '추가 점수 ', { h: '+2' }],
+        apply() { rogueGrowthChance = 0.55; rogueGrowthScore = 2; } }
     ]
   },
   {
@@ -1243,19 +1246,19 @@ function rogueBuildEnhancedChoice(base, level) {
     // 미래 강화: 확률만 소폭(+2/+3/+4%p), 추가 점수는 기본과 동일
     if (level === 1) {
       return {
-        desc: ['장애물 통과 시 ', g('22%'), ' 확률로 최대 게이지 ', { h: '+1' }, '\n', '추가 점수 ', { h: '+1' }],
-        apply() { rogueGrowthChance = 0.22; rogueGrowthScore = 1; }
+        desc: ['장애물 통과 시 ', g('27%'), ' 확률로 최대 게이지 ', { h: '+1' }, '\n', '추가 점수 ', { h: '+1' }],
+        apply() { rogueGrowthChance = 0.27; rogueGrowthScore = 1; }
       };
     }
     if (level === 2) {
       return {
-        desc: ['장애물 통과 시 ', g('33%'), ' 확률로 최대 게이지 ', { h: '+1' }, '\n', '추가 점수 ', { h: '+1.5' }],
-        apply() { rogueGrowthChance = 0.33; rogueGrowthScore = 1.5; }
+        desc: ['장애물 통과 시 ', g('38%'), ' 확률로 최대 게이지 ', { h: '+1' }, '\n', '추가 점수 ', { h: '+1.5' }],
+        apply() { rogueGrowthChance = 0.38; rogueGrowthScore = 1.5; }
       };
     }
     return {
-      desc: ['장애물 통과 시 ', g('54%'), ' 확률로 최대 게이지 ', { h: '+1' }, '\n', '추가 점수 ', { h: '+2' }],
-      apply() { rogueGrowthChance = 0.54; rogueGrowthScore = 2; }
+      desc: ['장애물 통과 시 ', g('59%'), ' 확률로 최대 게이지 ', { h: '+1' }, '\n', '추가 점수 ', { h: '+2' }],
+      apply() { rogueGrowthChance = 0.59; rogueGrowthScore = 2; }
     };
   }
 
@@ -1385,21 +1388,22 @@ function rogueBuildEnhancedChoice(base, level) {
   }
 
   if (id === 'rage') {
+    // 미래 강화: 임계·점수 배율만 강화, 피격 감소는 기본 유지
     if (level === 1) {
       return {
-        desc: ['게이지 ', g('30%'), ' 이하일 때 모든 점수 ', g('1.4배'), ', 피격 피해 ', g('18% 감소')],
-        apply() { rogueRageThreshold = 0.30; rogueRageScoreMult = 1.4; rogueRageHitMult = 0.82; }
+        desc: ['게이지 ', g('30%'), ' 이하일 때 모든 점수 ', g('1.4배'), ', 피격 피해 ', { h: '15% 감소' }],
+        apply() { rogueRageThreshold = 0.30; rogueRageScoreMult = 1.4; rogueRageHitMult = 0.85; }
       };
     }
     if (level === 2) {
       return {
-        desc: ['게이지 ', g('36%'), ' 이하일 때 모든 점수 ', g('1.6배'), ', 피격 피해 ', g('24% 감소')],
-        apply() { rogueRageThreshold = 0.36; rogueRageScoreMult = 1.6; rogueRageHitMult = 0.76; }
+        desc: ['게이지 ', g('36%'), ' 이하일 때 모든 점수 ', g('1.6배'), ', 피격 피해 ', { h: '20% 감소' }],
+        apply() { rogueRageThreshold = 0.36; rogueRageScoreMult = 1.6; rogueRageHitMult = 0.80; }
       };
     }
     return {
-      desc: ['게이지 ', g('48%'), ' 이하일 때 모든 점수 ', g('1.8배'), ', 피격 피해 ', g('42% 감소')],
-      apply() { rogueRageThreshold = 0.48; rogueRageScoreMult = 1.8; rogueRageHitMult = 0.58; }
+      desc: ['게이지 ', g('48%'), ' 이하일 때 모든 점수 ', g('1.8배'), ', 피격 피해 ', { h: '35% 감소' }],
+      apply() { rogueRageThreshold = 0.48; rogueRageScoreMult = 1.8; rogueRageHitMult = 0.65; }
     };
   }
 
@@ -1568,6 +1572,8 @@ function pickRogueAugment(idx) {
   if ((rogueAugmentLevels['future'] || 0) >= 2) {
     rogueGauge = Math.min(rogueMaxGauge, rogueGauge + rogueMaxGauge * 0.25);
   }
+  if (isOpeningPick) noteRogueFirstAugmentPick(base.id);
+  checkRogueAugmentAchievementsLive();
   rogueAugmentPickedIdx = idx;
   rogueAugmentCloseAt = performance.now();
   rogueAugmentCardRects = []; // 닫히는 동안 클릭 차단
@@ -2320,6 +2326,9 @@ function practiceInvincibleBump(obs) {
   if (t < practiceRespawnInvulnUntil) return false;
   practiceRespawnInvulnUntil = t + ROGUE_HIT_INVULN_MS;
   rogueHitFlashUntil = t + 260;
+  combo = 0;
+  comboSoundStep = 0;
+  lastScoreTime = 0;
   if (obs && !obs.fadeOut) obs.fadeOut = OBS_FADE_FRAMES;
   try { playMenuDenySound(); } catch (_) {}
   return true;
@@ -2331,6 +2340,9 @@ function practiceWallWrap() {
   if (t >= practiceRespawnInvulnUntil) {
     practiceRespawnInvulnUntil = t + ROGUE_HIT_INVULN_MS;
     rogueHitFlashUntil = t + 260;
+    combo = 0;
+    comboSoundStep = 0;
+    lastScoreTime = 0;
     try { playMenuDenySound(); } catch (_) {}
   }
   const head = points[0];
@@ -2769,16 +2781,34 @@ function pickMovingObstacleTravel(baseX, baseY, circles, otherObsList) {
 }
 
 function pushObstacleAt(x, y, circles, extra) {
+  const ex = extra ? { ...extra } : {};
   let isGolden =
     !tutorialMode &&
     (GOLDEN_OBS_ENABLED_IN_PRACTICE ? true : gameMode !== 'practice') &&
     gameMode !== 'multi' &&
-    gameMode !== 'roguelike' &&
     (GOLDEN_OBS_FORCE_TEST || Math.random() < GOLDEN_OBS_CHANCE);
   // 로그라이크 '노다지' 증강: 확률적으로 추가점수 보너스 장애물(다른 색)
-  const isRogueBonus =
-    isRogue() && rogueBonusChance > 0 && Math.random() < rogueBonusChance;
-  if (isRogueBonus) isGolden = false;
+  // 황금이 뜨면 노다지·이동 속성은 무시하고 황금만 적용
+  let isRogueBonus =
+    !isGolden &&
+    isRogue() &&
+    rogueBonusChance > 0 &&
+    Math.random() < rogueBonusChance;
+  if (isGolden) {
+    isRogueBonus = false;
+    if (ex.isMoving) {
+      ex.isMoving = false;
+      delete ex.moveUx;
+      delete ex.moveUy;
+      delete ex.moveBaseX;
+      delete ex.moveBaseY;
+      delete ex.moveT;
+      delete ex.moveTLo;
+      delete ex.moveTHi;
+      delete ex.moveDir;
+      delete ex.moveSpeed;
+    }
+  }
   staticObs.push({
     x,
     y,
@@ -2792,7 +2822,7 @@ function pushObstacleAt(x, y, circles, extra) {
     rogueMarkOx: null,
     rogueMarkOy: null,
     _chaosGlitchTarget: chaosHasDebuff('obs_glitch') ? Math.random() < 1 / 3 : false,
-    ...extra
+    ...ex
   });
 }
 
@@ -3265,6 +3295,7 @@ function triggerGameOver(cause) {
   // 로그라이크: 최고 생존 시간 저장
   if (!tutorialMode && gameMode === 'roguelike') {
     trySaveRogueBestMs(rogueRunMs);
+    checkRogueAchievementsAfterRun();
   }
   // 업적: 연습·로그라이크 제외. 개별 업적의 모드 제한은 checkAchievementsAfterRun에서 처리.
   if (!tutorialMode && gameMode !== 'practice' && gameMode !== 'roguelike') {
@@ -3630,6 +3661,93 @@ function checkAchievementsAfterRun(finalScore, maxCombo, comboBonusTotal) {
     const r44 = Math.round(fs * 10) / 10;
     if (gameMode === 'normal' && Number.isFinite(fs) && r44 === 44) unlockAchievement('devil_44');
     if (gameMode === 'hard' && Number.isFinite(fs) && r44 === 44) unlockAchievement('archdevil_44_hard');
+  }
+}
+
+const ROGUE_FIRST_AUG_STREAK_KEY = 'snakombo_rogue_first_aug_streak_v1';
+const ROGUE_GOD_MS = 135000;
+const ROGUE_LV2_ONLY_MS = 75000;
+
+function getRogueFirstAugmentStreak() {
+  try {
+    const raw = localStorage.getItem(ROGUE_FIRST_AUG_STREAK_KEY);
+    if (!raw) return { id: '', count: 0 };
+    const obj = JSON.parse(raw);
+    const id = obj && typeof obj.id === 'string' ? obj.id : '';
+    const count = obj && Number.isFinite(obj.count) ? Math.max(0, obj.count | 0) : 0;
+    return { id, count };
+  } catch {
+    return { id: '', count: 0 };
+  }
+}
+
+function saveRogueFirstAugmentStreak(id, count) {
+  try {
+    localStorage.setItem(ROGUE_FIRST_AUG_STREAK_KEY, JSON.stringify({ id: id || '', count: count | 0 }));
+  } catch (_) {}
+}
+
+/** 로그라이크 시작 직후 첫 증강 선택 — 도루마무 */
+function noteRogueFirstAugmentPick(augId) {
+  if (!augId || tutorialMode) return;
+  const prev = getRogueFirstAugmentStreak();
+  const nextCount = prev.id === augId ? prev.count + 1 : 1;
+  saveRogueFirstAugmentStreak(augId, nextCount);
+  if (nextCount >= 3) unlockAchievement('hidden_dorumamu');
+}
+
+function countRogueAugmentsAtLevel(level) {
+  let n = 0;
+  for (const id of Object.keys(rogueAugmentLevels)) {
+    if ((rogueAugmentLevels[id] || 0) === level) n++;
+  }
+  return n;
+}
+
+/** 보유 증강이 전부 정확히 Lv.2인지(1개 이상) */
+function rogueHasOnlyLevel2Augments() {
+  const ids = Object.keys(rogueAugmentLevels);
+  let owned = 0;
+  for (let i = 0; i < ids.length; i++) {
+    const lv = rogueAugmentLevels[ids[i]] || 0;
+    if (lv <= 0) continue;
+    if (lv !== 2) return false;
+    owned++;
+  }
+  return owned > 0;
+}
+
+function noteRogueSingleObstacleScore(pts) {
+  if (!isRogue() || tutorialMode || !(pts > 0)) return;
+  rogueMaxSingleObsPtsThisRun = Math.max(rogueMaxSingleObsPtsThisRun, pts);
+  if (pts >= 13) unlockAchievement('rogue_one_shot_13');
+}
+
+/** 증강 선택 직후 즉시 달성 가능 업적 */
+function checkRogueAugmentAchievementsLive() {
+  if (!isRogue() || tutorialMode) return;
+  if (countRogueAugmentsAtLevel(3) >= 2) unlockAchievement('rogue_ssam');
+}
+
+/** 로그라이크 생존 중 즉시 달성(신) */
+function checkRogueLiveTimeAchievements() {
+  if (!isRogue() || tutorialMode) return;
+  if (rogueRunMs >= ROGUE_GOD_MS) unlockAchievement('rogue_god');
+}
+
+/** 로그라이크 게임 오버 시 */
+function checkRogueAchievementsAfterRun() {
+  if (tutorialMode || gameMode !== 'roguelike') return;
+  if (countRogueAugmentsAtLevel(3) >= 2) unlockAchievement('rogue_ssam');
+  if (rogueMaxSingleObsPtsThisRun >= 13) unlockAchievement('rogue_one_shot_13');
+  if (rogueRunMs >= ROGUE_GOD_MS || getRogueBestMs() >= ROGUE_GOD_MS) {
+    unlockAchievement('rogue_god');
+  }
+  if (
+    rogueRunMs >= ROGUE_LV2_ONLY_MS &&
+    rogueHasOnlyLevel2Augments()
+  ) {
+    unlockAchievement('rogue_lv2_75');
   }
 }
 
@@ -4437,6 +4555,7 @@ function animate() {
   // 로그라이크: 게이지 감소 + 시작 시 1개/이후 15초마다 증강, 선택 시 감소량 증가
   if (playing && isRogue()) {
     rogueRunMs += frameDeltaMs;
+    checkRogueLiveTimeAchievements();
     rogueGauge -= rogueCurrentDrain() * (frameDeltaMs / 1000);
     // 표식 증강: 주기적으로 무작위 장애물에 표식 부여
     if (rogueMarkIntervalMs > 0 && rogueMarkTargets > 0) {
@@ -4782,6 +4901,7 @@ function animate() {
                       if (isRogue()) {
                         pts += rogueTryGrowthOnPass();
                         pts = rogueApplyScoreGain(pts);
+                        noteRogueSingleObstacleScore(pts);
                       }
                       if (!(tutorialMode && tutorialStep === 3)) {
                         const scoreBefore = score;
