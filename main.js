@@ -707,16 +707,13 @@ function rogueActivateCounter() {
   rogueCounterUntilRunMs = rogueRunMs + rogueCounterDurationMs;
 }
 
-/** 성장: 장애물 통과/폭파 소거 시 확률로 최대 게이지 +1 및 추가 점수 */
-function rogueTryGrowthOnPass(x, y) {
-  if (!(rogueGrowthChance > 0)) return false;
-  if (Math.random() >= rogueGrowthChance) return false;
+/** 성장: 통과/폭파 시 확률로 최대 게이지 +1. 추가 점수(raw)를 반환(호출측에서 합산) */
+function rogueTryGrowthOnPass() {
+  if (!(rogueGrowthChance > 0)) return 0;
+  if (Math.random() >= rogueGrowthChance) return 0;
   rogueMaxGauge += 1;
   rogueGrowthBonusMax += 1;
-  const raw = rogueGrowthScore > 0 ? rogueGrowthScore : 1;
-  const pts = rogueApplyScoreGain(raw);
-  rogueGrantPoints(pts, x, y - 36);
-  return true;
+  return rogueGrowthScore > 0 ? rogueGrowthScore : 1;
 }
 
 /** 로그라이크 점수: 소수 둘째 자리 이상을 첫째 자리로 올림 (1.45 → 1.5) */
@@ -785,7 +782,7 @@ function rogueTriggerBlast(cx, cy) {
       o.fadeOut = OBS_FADE_FRAMES;
       rawTotal += pts;
       cleared++;
-      rogueTryGrowthOnPass(o.x, o.y);
+      rawTotal += rogueTryGrowthOnPass();
     }
   }
   if (cleared <= 0 || !(rawTotal > 0)) return;
@@ -4746,13 +4743,15 @@ function animate() {
                         }
                       }
                       if (isRogue() && obs.isRogueBonus && rogueBonusMult > 1) pts *= rogueBonusMult;
-                      if (isRogue()) pts = rogueApplyScoreGain(pts);
+                      if (isRogue()) {
+                        pts += rogueTryGrowthOnPass();
+                        pts = rogueApplyScoreGain(pts);
+                      }
                       if (!(tutorialMode && tutorialStep === 3)) {
                         const scoreBefore = score;
                         score += pts;
                         if (isRogue()) {
                           rogueGauge = Math.min(rogueMaxGauge, rogueGauge + pts * rogueHealMult);
-                          rogueTryGrowthOnPass(hx, hy);
                         }
                         if (
                           localPlayEnabled &&
