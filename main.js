@@ -1105,8 +1105,8 @@ const ROGUE_AUGMENTS = [
         apply() { rogueShieldMax = 2; } },
       { desc: ['선택마다 보호막 ', { h: '3회' }],
         apply() { rogueShieldMax = 3; } },
-      { desc: ['선택마다 보호막 ', { h: '4회' }, ', 소모 시 최대 게이지 ', { h: '10% 회복' }],
-        apply() { rogueShieldMax = 4; rogueShieldHeal = 0.10; } }
+      { desc: ['선택마다 보호막 ', { h: '4회' }, ', 소모 시 최대 게이지 ', { h: '5% 회복' }],
+        apply() { rogueShieldMax = 4; rogueShieldHeal = 0.05; } }
     ]
   },
   {
