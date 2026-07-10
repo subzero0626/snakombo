@@ -257,9 +257,9 @@ function resize() {
   }
 }
 
-const SEGMENTS = 100;
+const SEGMENTS = IS_MOBILE ? 118 : 100;
 /** 혼돈 디버프 long_snake: 세그먼트 개수만 1.5배 */
-const SEGMENTS_CHAOS_LONG = 150;
+const SEGMENTS_CHAOS_LONG = IS_MOBILE ? 177 : 150;
 const SNAKE_START_X_OFFSET = -100 * GAME_SCALE;
 const points = [];
 
@@ -1818,10 +1818,15 @@ function drawRogueHud(ctx) {
   // 채움(회색, 흐리게)
   ctx.fillStyle = 'rgba(185,185,190,0.45)';
   rogueRoundRect(ctx, x, y, barW * ratio, barH, barH / 2); ctx.fill();
-  // 현재 체력 숫자: 게이지 오른쪽 아래. 성장 보너스 있으면 "50 + 3"(오른쪽 파랑=추가 최대)
-  const curNum = '' + Math.ceil(rogueGauge);
+  // 성장 보너스 있으면 "기본최대(또는 그 이하 현재) + 성장"
+  // 예: 풀피 53 → 50 + 3, 현재 45 → 45 + 3 (53 + 3은 안 씀)
   const growthBonus = Math.max(0, rogueGrowthBonusMax | 0);
   const bonusStr = growthBonus > 0 ? ('' + growthBonus) : '';
+  const cur = Math.ceil(rogueGauge);
+  const baseMax = Math.max(0, Math.round(rogueMaxGauge - growthBonus));
+  const mainNum = growthBonus > 0
+    ? ('' + Math.min(cur, baseMax))
+    : ('' + cur);
   ctx.textAlign = 'right';
   ctx.textBaseline = 'top';
   ctx.font = `800 ${px(13)}px Nunito, sans-serif`;
@@ -1836,11 +1841,11 @@ function drawRogueHud(ctx) {
     cursorRight -= ctx.measureText('+').width + px(4);
   }
   ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  ctx.fillText(curNum, cursorRight, numTop);
+  ctx.fillText(mainNum, cursorRight, numTop);
   // 무적(보호막) 카운트: 체력 숫자 왼쪽에 금색 원(잔여=채움, 소진=외곽선)
   if (rogueShieldMax > 0) {
     const plusW = bonusStr ? (ctx.measureText('+').width + px(8)) : 0;
-    const numW = ctx.measureText(curNum).width + (bonusStr ? (ctx.measureText(bonusStr).width + px(4) + plusW) : 0);
+    const numW = ctx.measureText(mainNum).width + (bonusStr ? (ctx.measureText(bonusStr).width + px(4) + plusW) : 0);
     const r = px(5);
     const gap = px(4);
     const pipCy = numTop + px(6);
@@ -1860,15 +1865,7 @@ function drawRogueHud(ctx) {
     }
   }
   ctx.restore();
-  // 피격 붉은 화면 플래시
-  const t = performance.now();
-  if (t < rogueHitFlashUntil) {
-    const a = (rogueHitFlashUntil - t) / 260;
-    ctx.save();
-    ctx.fillStyle = 'rgba(248,68,68,' + (0.28 * a) + ')';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.restore();
-  }
+  // 피격 붉은 화면 플래시는 drawHitFlashOverlay에서 공통 처리
 }
 
 // 화면 왼쪽 위: 보유 증강 아이콘 목록(이름 + 현재 레벨)
@@ -2317,8 +2314,38 @@ function isPracticeRun() {
   return gameRunning && !tutorialMode && gameMode === 'practice';
 }
 
+/** 연습 무적: 리스폰 없이 그 자리에서 계속(로그라이크처럼 빨간 플래시 + 짧은 무적) */
+function practiceInvincibleBump(obs) {
+  const t = performance.now();
+  if (t < practiceRespawnInvulnUntil) return false;
+  practiceRespawnInvulnUntil = t + ROGUE_HIT_INVULN_MS;
+  rogueHitFlashUntil = t + 260;
+  if (obs && !obs.fadeOut) obs.fadeOut = OBS_FADE_FRAMES;
+  try { playMenuDenySound(); } catch (_) {}
+  return true;
+}
+
+/** 연습 무적: 벽 밖으로 나가면 반대편으로 워프(중앙 리스폰 없음) */
+function practiceWallWrap() {
+  const t = performance.now();
+  if (t >= practiceRespawnInvulnUntil) {
+    practiceRespawnInvulnUntil = t + ROGUE_HIT_INVULN_MS;
+    rogueHitFlashUntil = t + 260;
+    try { playMenuDenySound(); } catch (_) {}
+  }
+  const head = points[0];
+  let dx = 0, dy = 0;
+  if (head.x < 0) dx = canvas.width;
+  else if (head.x > canvas.width) dx = -canvas.width;
+  if (head.y < 0) dy = canvas.height;
+  else if (head.y > canvas.height) dy = -canvas.height;
+  if (dx || dy) {
+    for (const p of points) { p.x += dx; p.y += dy; }
+  }
+}
+
 function respawnPracticeRun() {
-  // "무적": 게임오버 대신 중앙에서 다시 시작(장애물은 유지)
+  // 레거시: 중앙 리스폰(현재 무적 피격은 practiceInvincibleBump 사용)
   const cx = snakeStartCenterX();
   const cy = canvas.height / 2;
   angle = 0;
@@ -2326,11 +2353,19 @@ function respawnPracticeRun() {
   currentSpeed = getRunBaseSpeed();
   combo = 0;
   lastScoreTime = 0;
-  // 장애물/스폰 상태는 그대로 유지한다.
-  // (리스폰 직후 즉사 방지용 짧은 유예는 아래 타임스탬프로 처리)
   scoreStart = performance.now();
   gameStartDelayUntil = performance.now() + 200;
   practiceRespawnInvulnUntil = performance.now() + 650;
+}
+
+function drawHitFlashOverlay(ctx) {
+  const t = performance.now();
+  if (t >= rogueHitFlashUntil) return;
+  const a = (rogueHitFlashUntil - t) / 260;
+  ctx.save();
+  ctx.fillStyle = 'rgba(248,68,68,' + (0.28 * a) + ')';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
 }
 
 const TUTORIAL_S1_TEXT1_MS = 520;
@@ -4525,7 +4560,7 @@ function animate() {
       points[0].y > canvas.height
     ) {
       if (gameMode === 'practice' && practiceSettings.invincible) {
-        respawnPracticeRun();
+        practiceWallWrap();
       } else if (isRogue()) {
         rogueWallWrap();
       } else {
@@ -4575,10 +4610,11 @@ function animate() {
         for (const c of obs.circles) {
           if (checkCollision(points[0].x, points[0].y, obs.x + c.ox, obs.y + c.oy, c.r)) {
             if (gameMode === 'practice' && practiceSettings.invincible) {
-              if (performance.now() < practiceRespawnInvulnUntil) continue;
-              respawnPracticeRun();
-              hitFound = true;
-              break;
+              if (practiceInvincibleBump(obs)) {
+                hitFound = true;
+                break;
+              }
+              continue;
             }
             if (isRogue()) {
               rogueApplyHitObstacle(obs);
@@ -4846,8 +4882,7 @@ function animate() {
         const dy = points[0].y - points[i].y;
         if (Math.sqrt(dx * dx + dy * dy) < 6) {
           if (gameMode === 'practice' && practiceSettings.invincible) {
-            if (performance.now() < practiceRespawnInvulnUntil) break;
-            respawnPracticeRun();
+            practiceInvincibleBump(null);
           } else if (isRogue()) {
             if (performance.now() < rogueInvulnUntil) break;
             rogueApplyHit();
@@ -5425,6 +5460,8 @@ function animate() {
   drawRogueMarkFx(ctx);
   // 로그라이크 하단 게이지 바
   drawRogueHud(ctx);
+  // 피격 붉은 화면(로그라이크·연습 무적 공통)
+  drawHitFlashOverlay(ctx);
   // 로그라이크 보유 증강 아이콘(좌상단)
   drawRogueAugmentIcons(ctx);
 
