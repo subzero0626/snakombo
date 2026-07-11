@@ -629,7 +629,9 @@ let rogueDrainRate = ROGUE_BASE_DRAIN;  // 현재 감소량(/초). 픽으로만 
 let rogueDrainSteps = 0;                // 감소량 가속 적용 횟수(2번째 픽부터)
 let rogueSpeedMult = 1;                 // 증강: 이동 속도 배율(누적 가산)
 let rogueSpawnMult = 1;                 // 증강(질주): 장애물 소환 속도 배율
-let rogueHealMult = 1;                  // 증강: 점수 회복 배율
+let rogueSniperMult = 1;                // 증강(저격): 통과 점수 배율(폭파 제외)
+let rogueSniperMaxRatio = 4;            // 증강(저격): 근접 판정 최대 배수(작을수록 정밀, 4=기본)
+let rogueSniperComboDoubleP = 0;        // 증강(저격) L3: 통과 시 콤보 +2 확률
 let rogueDrainMult = 1;                 // 증강: 게이지 감소 완화 배율
 let rogueHitPenaltyMult = 1;            // 증강: 충돌 페널티 완화 배율
 let rogueBaseScoreBonus = 0;            // 증강: 통과당 기본 점수 가산
@@ -737,7 +739,7 @@ function rogueApplyScoreGain(rawPts) {
 function rogueGrantPoints(pts, x, y, color) {
   if (!(pts > 0)) return;
   score += pts;
-  rogueGauge = Math.min(rogueMaxGauge, rogueGauge + pts * rogueHealMult);
+  rogueGauge = Math.min(rogueMaxGauge, rogueGauge + pts);
   floatingTexts.push({
     x: x, y: y,
     text: '+' + pts,
@@ -809,7 +811,9 @@ function resetRogueState() {
   rogueDrainSteps = 0;
   rogueSpeedMult = 1;
   rogueSpawnMult = 1;
-  rogueHealMult = 1;
+  rogueSniperMult = 1;
+  rogueSniperMaxRatio = 4;
+  rogueSniperComboDoubleP = 0;
   rogueDrainMult = 1;
   rogueHitPenaltyMult = 1;
   rogueBaseScoreBonus = 0;
@@ -1092,7 +1096,7 @@ const ROGUE_AUGMENTS = [
     levels: [
       { desc: ['이동 속도 ', { h: '+10%' }, ', 장애물 소환 ', { h: '+12%' }],
         apply() { rogueSpeedMult += 0.10; rogueSpawnMult += 0.12; } },
-      { desc: ['이동 속도 ', { h: '+8%' }, ', 장애물 소환 ', { h: '+20%' }],
+      { desc: ['이동 속도 ', { h: '+8%' }, ', 장애물 소환 ', { h: '+8%' }],
         apply() { rogueSpeedMult += 0.08; rogueSpawnMult += 0.08; } },
       { desc: ['이동 속도 ', { h: '+14%' }, ', 피격 데미지 ', { h: '40% 감소' }],
         apply() { rogueSpeedMult += 0.14; rogueHitPenaltyMult = 0.6; } }
@@ -1125,9 +1129,9 @@ const ROGUE_AUGMENTS = [
     levels: [
       { desc: ['피격 시 주변 장애물 소거, 장애물 소환 ', { h: '+25%' }],
         apply() { rogueBlastRadius = HEAD_WIDTH * 21; rogueSpawnMult += 0.25; } },
-      { desc: ['폭파 범위 ', { h: '확대' }, ', 장애물 소환 ', { h: '+35%' }],
+      { desc: ['폭파 범위 ', { h: '확대' }, ', 장애물 소환 ', { h: '+10%' }],
         apply() { rogueBlastRadius = HEAD_WIDTH * 27; rogueSpawnMult += 0.10; } },
-      { desc: ['폭파 범위 ', { h: '매우 확대' }, ', 장애물 소환 ', { h: '+55%' }],
+      { desc: ['폭파 범위 ', { h: '매우 확대' }, ', 장애물 소환 ', { h: '+20%' }],
         apply() { rogueBlastRadius = HEAD_WIDTH * 35; rogueSpawnMult += 0.20; } }
     ]
   },
@@ -1182,6 +1186,17 @@ const ROGUE_AUGMENTS = [
         apply() { rogueFutureEnhance = true; } },
       { desc: ['증강 선택 시 최대 게이지의 ', { h: '25%' }, ' 회복'],
         apply() { rogueFutureEnhance = true; } }
+    ]
+  },
+  {
+    id: 'sniper', cat: 'offense', name: '저격',
+    levels: [
+      { desc: ['가장 먼 ', { h: '0.5점 구간' }, ' 무득점, 장애물을 지날 때 점수 ', { h: '×1.3' }],
+        apply() { rogueSniperMaxRatio = 3; rogueSniperMult = 1.3; } },
+      { desc: [{ h: '1점 구간' }, '까지 무득점, 장애물을 지날 때 점수 ', { h: '×1.5' }],
+        apply() { rogueSniperMaxRatio = 2; rogueSniperMult = 1.5; } },
+      { desc: ['장애물을 지날 때 점수 ', { h: '×1.8' }, ', 통과 시 ', { h: '35%' }, ' 확률로 콤보 ', { h: '+2' }],
+        apply() { rogueSniperMaxRatio = 2; rogueSniperMult = 1.8; rogueSniperComboDoubleP = 0.35; } }
     ]
   }
 ];
@@ -4826,7 +4841,7 @@ function animate() {
           if (obs.fadeOut) continue;
 
           const minEdgeDist = minEdgeDistForHead(obs, hx, hy);
-          if (minEdgeDist <= HEAD_WIDTH * 4) {
+          if (minEdgeDist <= HEAD_WIDTH * (isRogue() ? rogueSniperMaxRatio : 4)) {
             const pts0 = basePtsFromMinEdge(minEdgeDist);
             if (!obs[nearKey]) obs[nearKey] = nowMs;
             obs[bestKey] = Math.max(obs[bestKey] || 0, pts0);
@@ -4875,6 +4890,7 @@ function animate() {
                     } else {
                       if (timedOut) { combo = 0; comboSoundStep = 0; }
                       combo++;
+                      if (isRogue() && rogueSniperComboDoubleP > 0 && Math.random() < rogueSniperComboDoubleP) combo++;
                       comboSoundStep++;
                       if (isRogue() && combo > rogueComboCap()) combo = rogueComboCap();
                       playComboStackSound(comboSoundStep);
@@ -4900,6 +4916,7 @@ function animate() {
                       if (isRogue() && obs.isRogueBonus && rogueBonusMult > 1) pts *= rogueBonusMult;
                       if (isRogue()) {
                         pts += rogueTryGrowthOnPass();
+                        if (rogueSniperMult !== 1) pts *= rogueSniperMult; // 저격: 통과 점수만(폭파 제외)
                         pts = rogueApplyScoreGain(pts);
                         noteRogueSingleObstacleScore(pts);
                       }
@@ -4907,7 +4924,7 @@ function animate() {
                         const scoreBefore = score;
                         score += pts;
                         if (isRogue()) {
-                          rogueGauge = Math.min(rogueMaxGauge, rogueGauge + pts * rogueHealMult);
+                          rogueGauge = Math.min(rogueMaxGauge, rogueGauge + pts);
                         }
                         if (
                           localPlayEnabled &&
@@ -7095,6 +7112,8 @@ function startGame() {
 
 function startTutorial() {
   if (gameRunning) return;
+  // 해금되지 않은 모드는 튜토리얼도 진입 불가
+  if (getStartLockRequirementText()) return;
   setHubView(null);
   setMenuInfoOpen(false);
   gameStartDelayUntil = 0;
@@ -7238,6 +7257,10 @@ menuStart.addEventListener('click', e => {
   }
 });
 menuTutorial.addEventListener('click', () => {
+  if (getStartLockRequirementText()) {
+    playMenuDenySound();
+    return;
+  }
   playMenuUiSound('primary');
   startTutorial();
 });
@@ -7532,6 +7555,10 @@ if (onlineErrorBackBtn) {
 menuTutorial.addEventListener('keydown', e => {
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault();
+    if (getStartLockRequirementText()) {
+      playMenuDenySound();
+      return;
+    }
     playMenuUiSound('primary');
     startTutorial();
   }
