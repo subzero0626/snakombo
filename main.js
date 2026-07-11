@@ -257,7 +257,7 @@ function resize() {
   }
 }
 
-const SEGMENTS = IS_MOBILE ? 118 : 100;
+const SEGMENTS = IS_MOBILE ? 128 : 100;
 /** 혼돈 디버프 long_snake: 세그먼트 개수만 1.5배 */
 const SEGMENTS_CHAOS_LONG = IS_MOBILE ? 177 : 150;
 const SNAKE_START_X_OFFSET = -100 * GAME_SCALE;
@@ -272,7 +272,7 @@ function getRunSegmentCount() {
 }
 
 let angle = 0;
-const BASE_SPEED = 4.3 * GAME_SCALE;
+const BASE_SPEED = 4.3 * GAME_SCALE * (IS_MOBILE ? 1.08 : 1); // 모바일만 속도 소폭 상향(+8%)
 const SPEED_INCREMENT = 0.048 * GAME_SCALE; // per second (시간 경과 가속 완화, 기본 0.06)
 const COMBO_TIMEOUT_MS = 2000;
 /** 튜토리얼에서만 콤보 유지 제한(초) — 본편은 COMBO_TIMEOUT_MS */
