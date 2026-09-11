@@ -1,0 +1,42 @@
+---
+description: 대규모 변경 시 패치노트 자동 작성 규칙
+alwaysApply: true
+---
+
+# 패치노트
+
+위치: `index.html` → `#menu-info-patchnotes` (최신 버전이 맨 위).
+
+## 언제 자동으로 쓸지
+
+아래처럼 **큰 변경**을 구현·반영할 때는 사용자가 따로 요청하지 않아도 패치노트에 새 `ver` 섹션을 추가한다.
+
+- 새 모드 추가
+- 증강 **3개 이상** 추가(한 작업/한 묶음 기준)
+- 대규모 업데이트(메뉴 허브급 UI, 시스템 단위 기능, 모드 핵심 룰 개편 등)
+
+소규모 밸런스·버그픽스·문구 수정·수치 미세조정은 **자동으로 쓰지 않는다**. 사용자가 “패치노트 써줘”라고 할 때만 적는다.
+
+## 형식
+
+- 제목: `ver.X.Y`만 사용. **날짜 넣지 않음** (`ver.1.6` O / `ver.1.6[2026.07.11]` X)
+- 플레이어 관점의 짧은 bullet 2~4개. 내부 구현·캐시 버스트·파일명은 적지 않음
+- 한 버전에 몰아넣지 말고 **테마별로 적당히 나눈다** (모드 / 증강 묶음 / UI 등)
+- 기존 버전 내용은 지우지 않고, 새 버전만 위에 추가
+- 강조는 기존처럼 `<strong class="text-zinc-200">…</strong>`
+
+## 버전 번호
+
+현재 최신 `ver`의 minor를 +1 한다 (예: 최신이 1.5면 다음은 1.6). 사용자가 버전을 지정하면 그걸 따른다.
+
+## 예시
+
+```html
+<section class="space-y-3">
+  <h3 class="text-[12px] font-extrabold tracking-tight text-zinc-200">ver.1.6</h3>
+  <ul class="list-inside list-disc space-y-3.5">
+    <li><strong class="text-zinc-200">○○</strong> 모드 추가</li>
+    <li>증강 <strong class="text-zinc-200">A·B·C</strong> 추가</li>
+  </ul>
+</section>
+```

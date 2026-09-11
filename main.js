@@ -630,7 +630,7 @@ let rogueDrainSteps = 0;                // 감소량 가속 적용 횟수(2번�
 let rogueSpeedMult = 1;                 // 증강: 이동 속도 배율(누적 가산)
 let rogueSpawnMult = 1;                 // 증강(질주): 장애물 소환 속도 배율
 let rogueSniperMult = 1;                // 증강(저격): 통과 점수 배율(폭파 제외)
-let rogueSniperMaxRatio = 4;            // 증강(저격): 근접 판정 최대 배수(작을수록 정밀, 4=기본)
+let rogueSniperMaxRatio = 5;            // 증강(저격): 근접 판정 최대 배수(작을수록 정밀, 5=기본)
 let rogueSniperComboDoubleP = 0;        // 증강(저격) L3: 통과 시 콤보 +2 확률
 let rogueDrainMult = 1;                 // 증강: 게이지 감소 완화 배율
 let rogueHitPenaltyMult = 1;            // 증강: 충돌 페널티 완화 배율
@@ -662,8 +662,6 @@ let rogueCounterUntilRunMs = 0;         // 역습 종료 시점(rogueRunMs)
 let rogueGrowthChance = 0;              // 증강(성장): 통과/폭파 시 발동 확률
 let rogueGrowthScore = 0;               // 증강(성장): 발동 시 추가 점수
 let rogueGrowthBonusMax = 0;            // 성장으로 올린 최대 게이지(표시용)
-let rogueGhostSelfImmune = false;       // 증강(유령): 자기몸 피격 무시
-let rogueGhostWallImmune = false;       // 증강(유령): 벽 피격 무시
 let rogueFutureEnhance = false;         // 증강(미래 L1): 드래프트 수치 강화
 let rogueInvulnUntil = 0;
 let rogueAugmentActive = false;         // 증강 선택 중(플레이 정지)
@@ -812,7 +810,7 @@ function resetRogueState() {
   rogueSpeedMult = 1;
   rogueSpawnMult = 1;
   rogueSniperMult = 1;
-  rogueSniperMaxRatio = 4;
+  rogueSniperMaxRatio = 5;
   rogueSniperComboDoubleP = 0;
   rogueDrainMult = 1;
   rogueHitPenaltyMult = 1;
@@ -844,8 +842,6 @@ function resetRogueState() {
   rogueGrowthChance = 0;
   rogueGrowthScore = 0;
   rogueGrowthBonusMax = 0;
-  rogueGhostSelfImmune = false;
-  rogueGhostWallImmune = false;
   rogueFutureEnhance = false;
   rogueInvulnUntil = 0;
   rogueAugmentActive = false;
@@ -1169,17 +1165,6 @@ const ROGUE_AUGMENTS = [
     ]
   },
   {
-    id: 'ghost', cat: 'heal', name: '유령',
-    levels: [
-      { desc: ['자기 몸 피격 무시, 이동 속도 ', { h: '+15%' }],
-        apply() { rogueGhostSelfImmune = true; rogueSpeedMult += 0.15; } },
-      { desc: ['벽 피격 무시, 장애물 소환 ', { h: '+20%' }],
-        apply() { rogueGhostWallImmune = true; rogueSpawnMult += 0.20; } },
-      { desc: ['피격 데미지 ', { h: '20% 감소' }, ', 이동 속도 ', { h: '+15%' }],
-        apply() { rogueHitPenaltyMult *= 0.8; rogueSpeedMult += 0.15; } }
-    ]
-  },
-  {
     id: 'future', cat: 'heal', name: '미래',
     levels: [
       { desc: ['등장 증강이 각각 ', { h: '25%' }, ' 확률로 수치가 강화됩니다'],
@@ -1218,7 +1203,6 @@ function rogueAugmentCanEnhance(base, level) {
     id === 'speed' ||
     id === 'combo' ||
     id === 'blast' ||
-    id === 'ghost' ||
     id === 'rage' ||
     id === 'counter'
   );
@@ -1382,26 +1366,6 @@ function rogueBuildEnhancedChoice(base, level) {
     };
   }
 
-  if (id === 'ghost') {
-    if (level === 1) {
-      return {
-        desc: ['자기 몸 피격 무시, 이동 속도 ', g('+18%')],
-        apply() { rogueGhostSelfImmune = true; rogueSpeedMult += 0.18; }
-      };
-    }
-    if (level === 2) {
-      return {
-        desc: ['벽 피격 무시, 장애물 소환 ', g('+24%')],
-        apply() { rogueGhostWallImmune = true; rogueSpawnMult += 0.24; }
-      };
-    }
-    // L3 피감 20% 고유
-    return {
-      desc: ['피격 데미지 ', { h: '20% 감소' }, ', 이동 속도 ', g('+18%')],
-      apply() { rogueHitPenaltyMult *= 0.8; rogueSpeedMult += 0.18; }
-    };
-  }
-
   if (id === 'rage') {
     // 미래 강화: 임계·점수 배율만 강화, 피격 감소는 기본 유지
     if (level === 1) {
@@ -1503,7 +1467,7 @@ function rollRogueAugments() {
   const shuffledUp = shuffle(upgrades);
   const shuffledNew = shuffle(news);
   const picked = [];
-  // 미보유 증강이 있으면 최소 1장은 신규 L1을 보장(유령 등 안 뜨는 체감 방지)
+  // 미보유 증강이 있으면 최소 1장은 신규 L1을 보장(안 뜨는 체감 방지)
   const reserveNew = shuffledNew.length > 0 ? 1 : 0;
   const upgradeSlots = Math.max(0, 3 - reserveNew);
   for (const o of shuffledUp) {
@@ -1671,20 +1635,10 @@ function rogueApplyHitObstacle(obs) {
   obs.fadeOut = OBS_FADE_FRAMES;
 }
 
-// 자기 몸 충돌: 리스폰 없이 체력만 깎고 그대로 통과(짧은 무적으로 중복 방지)
-function rogueApplyHit() {
-  if (rogueGhostSelfImmune) return;
-  const t = performance.now();
-  if (t < rogueInvulnUntil) return;
-  rogueInvulnUntil = t + ROGUE_HIT_INVULN_MS;
-  if (rogueConsumeShield('보호막')) return;
-  rogueDamage();
-}
-
 // 벽 충돌: 체력이 깎이며 반대쪽 벽으로 부드럽게 워프(진행 방향 유지)
 function rogueWallWrap() {
   const t = performance.now();
-  if (!rogueGhostWallImmune && t >= rogueInvulnUntil) {
+  if (t >= rogueInvulnUntil) {
     rogueInvulnUntil = t + ROGUE_HIT_INVULN_MS;
     if (rogueConsumeShield('보호막')) {
       // 보호막으로 막혀도 워프는 수행(벽 밖에 남지 않게)
@@ -3315,10 +3269,6 @@ function triggerGameOver(cause) {
   // 업적: 연습·로그라이크 제외. 개별 업적의 모드 제한은 checkAchievementsAfterRun에서 처리.
   if (!tutorialMode && gameMode !== 'practice' && gameMode !== 'roguelike') {
     checkAchievementsAfterRun(score, maxComboThisRun, comboBonusPointsThisRun);
-    if (cause === 'self') {
-      const n = incrementSelfDeathCount();
-      if (n >= 15) unlockAchievement('hidden_tail_chain');
-    }
     // 비늘 재화: 5점당 1개(내림). 하드/혼돈은 1.5배(내림). 연습/튜토리얼 제외. (예: 37점 → 일반 7 / 하드·혼돈 11)
     const scaleMult = (gameMode === 'hard' || gameMode === 'chaos') ? 1.5 : 1;
     addScales(Math.floor((score / 5) * scaleMult));
@@ -3439,25 +3389,6 @@ const PLAY_COUNT_KEY = 'snakombo_play_count';
 const PLAY_COUNT_KEY_NORMAL = 'snakombo_play_count_normal_v1';
 const PLAY_COUNT_KEY_HARD = 'snakombo_play_count_hard_v1';
 const PLAY_COUNT_KEY_CHAOS = 'snakombo_play_count_chaos_v1';
-const SELF_DEATH_COUNT_KEY = 'snakombo_self_death_count_v1';
-
-function getSelfDeathCount() {
-  try {
-    const v = localStorage.getItem(SELF_DEATH_COUNT_KEY);
-    const n = parseInt(v, 10);
-    return Number.isFinite(n) && n >= 0 ? n : 0;
-  } catch {
-    return 0;
-  }
-}
-
-function incrementSelfDeathCount() {
-  const n = getSelfDeathCount() + 1;
-  try {
-    localStorage.setItem(SELF_DEATH_COUNT_KEY, String(n));
-  } catch (_) {}
-  return n;
-}
 
 function getPlayCount() {
   try {
@@ -4821,11 +4752,12 @@ function animate() {
         const ratio = minEdgeDist / HEAD_WIDTH;
         const elapsed = gameMode === 'practice' ? 0 : (nowMs - scoreStart) / 1000;
         let base, bonus;
-        if (ratio >= 3) {
+        // 점수 구간을 소폭 확장 (기존 3/2/1 → 3.6/2.4/1.2)
+        if (ratio >= 3.6) {
           if (chaosHasDebuff('no_half_point')) { base = 1; bonus = 0.5 * Math.floor(elapsed / 15); }
           else { base = 0.5; bonus = 0.5 * Math.floor(elapsed / 30); }
-        }         else if (ratio >= 2) { base = 1; bonus = 0.5 * Math.floor(elapsed / 15); }
-        else if (ratio >= 1) { base = 2; bonus = 0.5 * Math.floor(elapsed / 15); }
+        }         else if (ratio >= 2.4) { base = 1; bonus = 0.5 * Math.floor(elapsed / 15); }
+        else if (ratio >= 1.2) { base = 2; bonus = 0.5 * Math.floor(elapsed / 15); }
         else { base = 4; bonus = 0.5 * Math.floor(elapsed / 15); }
         // 로그라이크: 시간별 기본점수 상승 제거 + 증강 기본점수 가산
         if (isRogue()) { bonus = 0; base += rogueBaseScoreBonus; }
@@ -4841,7 +4773,7 @@ function animate() {
           if (obs.fadeOut) continue;
 
           const minEdgeDist = minEdgeDistForHead(obs, hx, hy);
-          if (minEdgeDist <= HEAD_WIDTH * (isRogue() ? rogueSniperMaxRatio : 4)) {
+          if (minEdgeDist <= HEAD_WIDTH * (isRogue() ? rogueSniperMaxRatio : 5)) {
             const pts0 = basePtsFromMinEdge(minEdgeDist);
             if (!obs[nearKey]) obs[nearKey] = nowMs;
             obs[bestKey] = Math.max(obs[bestKey] || 0, pts0);
@@ -5011,44 +4943,7 @@ function animate() {
       }
     }
 
-    // Self-collision: check head against body segments from index 20 onward
-    // Skip for first 3 seconds while segments spread out
-    if (!gameOver && (performance.now() - scoreStart) > 3000) {
-      for (let i = 20; i < getRunSegmentCount(); i++) {
-        const dx = points[0].x - points[i].x;
-        const dy = points[0].y - points[i].y;
-        if (Math.sqrt(dx * dx + dy * dy) < 6) {
-          if (gameMode === 'practice' && practiceSettings.invincible) {
-            practiceInvincibleBump(null);
-          } else if (isRogue()) {
-            if (performance.now() < rogueInvulnUntil) break;
-            rogueApplyHit();
-          } else {
-            if (localPlayEnabled) triggerLocalDeath('white', 'self');
-            else triggerGameOver('self');
-          }
-          break;
-        }
-      }
-    }
-
-    // Gray snake self-collision (local mode)
-    if (
-      localPlayEnabled &&
-      !gameOver &&
-      localSnakeGray.points &&
-      localSnakeGray.points.length >= getRunSegmentCount() &&
-      (performance.now() - scoreStart) > 3000
-    ) {
-      for (let i = 20; i < getRunSegmentCount(); i++) {
-        const dx = localSnakeGray.points[0].x - localSnakeGray.points[i].x;
-        const dy = localSnakeGray.points[0].y - localSnakeGray.points[i].y;
-        if (Math.sqrt(dx * dx + dy * dy) < 6) {
-          triggerLocalDeath('gray', 'self');
-          break;
-        }
-      }
-    }
+    // 자기 몸 충돌: 사망/피격 없음(통과)
 
     if (!tutorialMode && playing && score === 0) {
       zeroScoreHoldMs += frameDeltaMs;
