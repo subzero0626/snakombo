@@ -5,7 +5,7 @@ const ctx = canvas.getContext('2d');
 // 기능 토글(임시 비활성화용)
 // ============================================================
 const FEATURES = {
-  scales: false,    // 비늘 재화 표시/획득/사용
+  scales: true,     // 토큰 재화 표시/획득/사용
   customize: false, // 꾸미기 패널
   gacha: false      // 뽑기(가챠) 패널
 };
@@ -274,7 +274,7 @@ function getRunSegmentCount() {
 let angle = 0;
 const BASE_SPEED = 4.3 * GAME_SCALE * (IS_MOBILE ? 1.08 : 1); // 모바일만 속도 소폭 상향(+8%)
 const SPEED_INCREMENT = 0.048 * GAME_SCALE; // per second (시간 경과 가속 완화, 기본 0.06)
-const COMBO_TIMEOUT_MS = 2000;
+const COMBO_TIMEOUT_MS = 1500;
 /** 튜토리얼에서만 콤보 유지 제한(초) — 본편은 COMBO_TIMEOUT_MS */
 const TUTORIAL_COMBO_TIMEOUT_MS = 4000;
 
@@ -378,7 +378,7 @@ let nextRunIsLocal = false;
 const LOCAL_SPEED_MULT = 0.9; // 10% slower (base + increment)
 const LOCAL_TURN_MULT = 0.9; // 10% slower turning
 const LOCAL_SPAWN_RATE_MULT = 1.75; // obstacles spawn 1.75x faster
-const LOCAL_WIN_SCORE = 50;
+const LOCAL_WIN_SCORE = 30;
 
 let localWinner = null; // 'white' | 'gray' | null
 let localWinReason = ''; // 'death' | 'score'
@@ -391,10 +391,6 @@ const localSnakeGray = {
 };
 
 // Obstacle system
-const GOLDEN_OBS_CHANCE = 1 / 3000;
-// 테스트용: 황금 장애물 무조건 생성(원하면 false로)
-const GOLDEN_OBS_FORCE_TEST = false;
-const GOLDEN_OBS_ENABLED_IN_PRACTICE = false;
 /** 본편: 시작 시 장애물 소환 간격(프레임) — 클수록 생성 느림 */
 const SPAWN_INTERVAL_START = 74;
 /** 경과 시간에 따라 간격이 줄어들며 이 값(프레임) 아래로는 내려가지 않음 */
@@ -544,9 +540,11 @@ let wrongHalfAccumMs = 0;
 let mainRunSteerDUsed = false;
 /** 본편에서 0점 유지 누적 ms (숨김: 초보자..?) */
 let zeroScoreHoldMs = 0;
+let tokenPlayMs = 0;
 let animateLastFrameTime = 0;
 // HEAD_WIDTH is device-scaled (see updateGameScale)
 let floatingTexts = []; // for showing +points on screen
+let gemShards = [];
 
 let tutorialMode = false;
 let tutorialStep = 0;
@@ -580,7 +578,6 @@ function saveSelectedMode() {
 // 혼돈(Chaos) 모드: 시작 시 랜덤 디버프 3개 적용 (기본 룰은 일반과 동일)
 const CHAOS_DEBUFF_POOL = [
   'tight_gap', // 장애물 간격 감소 (3머리)
-  'long_snake', // 뱀 길이 증가 (1.5배)
   'obs_glitch', // 장애물 가끔 글리치 (1/7)
   'speed_flux', // 이동속도 유동 (0.7~1.5)
   'turn_inertia', // 회전 관성 증가(살짝)
@@ -736,11 +733,11 @@ function rogueApplyScoreGain(rawPts) {
 
 function rogueGrantPoints(pts, x, y, color) {
   if (!(pts > 0)) return;
-  score += pts;
+  score = roundScore(score + pts);
   rogueGauge = Math.min(rogueMaxGauge, rogueGauge + pts);
   floatingTexts.push({
     x: x, y: y,
-    text: '+' + pts,
+    text: '+' + formatScoreForMenu(pts),
     life: FLOAT_TEXT_LIFE,
     color: color || [255, 255, 255]
   });
@@ -2239,6 +2236,7 @@ const practiceSettings = {
   invincible: false
 };
 let practiceRespawnInvulnUntil = 0;
+let opalInvulnUntil = 0;
 
 function clamp(n, a, b) {
   return Math.max(a, Math.min(b, n));
@@ -2751,33 +2749,12 @@ function pickMovingObstacleTravel(baseX, baseY, circles, otherObsList) {
 
 function pushObstacleAt(x, y, circles, extra) {
   const ex = extra ? { ...extra } : {};
-  let isGolden =
-    !tutorialMode &&
-    (GOLDEN_OBS_ENABLED_IN_PRACTICE ? true : gameMode !== 'practice') &&
-    gameMode !== 'multi' &&
-    (GOLDEN_OBS_FORCE_TEST || Math.random() < GOLDEN_OBS_CHANCE);
+  const isGolden = false;
   // 로그라이크 '노다지' 증강: 확률적으로 추가점수 보너스 장애물(다른 색)
-  // 황금이 뜨면 노다지·이동 속성은 무시하고 황금만 적용
   let isRogueBonus =
-    !isGolden &&
     isRogue() &&
     rogueBonusChance > 0 &&
     Math.random() < rogueBonusChance;
-  if (isGolden) {
-    isRogueBonus = false;
-    if (ex.isMoving) {
-      ex.isMoving = false;
-      delete ex.moveUx;
-      delete ex.moveUy;
-      delete ex.moveBaseX;
-      delete ex.moveBaseY;
-      delete ex.moveT;
-      delete ex.moveTLo;
-      delete ex.moveTHi;
-      delete ex.moveDir;
-      delete ex.moveSpeed;
-    }
-  }
   staticObs.push({
     x,
     y,
@@ -2791,8 +2768,10 @@ function pushObstacleAt(x, y, circles, extra) {
     rogueMarkOx: null,
     rogueMarkOy: null,
     _chaosGlitchTarget: chaosHasDebuff('obs_glitch') ? Math.random() < 1 / 3 : false,
-    ...ex
+    ...ex,
+    relicId: (!isGolden && !isRogueBonus) ? rollRelicFragmentId() : null
   });
+  return staticObs[staticObs.length - 1];
 }
 
 function obstacleDrawAlpha(obs) {
@@ -3044,6 +3023,21 @@ function bakeMetaball(obs) {
   obs._offX = minX - pad;
   obs._offY = minY - pad;
 
+  if (obs.relicId) {
+    const relic = relicDef(obs.relicId);
+    if (relic && relic.color) {
+      const tintCanvas = document.createElement('canvas');
+      tintCanvas.width = bw;
+      tintCanvas.height = bh;
+      const tCtx = tintCanvas.getContext('2d');
+      tCtx.drawImage(bakeCanvas, 0, 0);
+      tCtx.globalCompositeOperation = 'source-in';
+      tCtx.fillStyle = lightGemTint(relic.color);
+      tCtx.fillRect(0, 0, bw, bh);
+      obs._cacheGem = tintCanvas;
+    }
+  }
+
   // 이동 장애물: 일반보다 아주 살짝 어두운 톤
   if (obs.isMoving && !obs.isGolden) {
     const darkCanvas = document.createElement('canvas');
@@ -3152,6 +3146,10 @@ function drawMetaballObstacle(obs) {
     ctx.drawImage(obs._cacheGolden, dx, dy);
     return;
   }
+  if (obs._cacheGem) {
+    ctx.drawImage(obs._cacheGem, dx, dy);
+    return;
+  }
   if (obs.isMoving && obs._cacheMoving) {
     ctx.drawImage(obs._cacheMoving, dx, dy);
     return;
@@ -3162,7 +3160,9 @@ function drawMetaballObstacle(obs) {
 function checkCollision(hx, hy, ccx, ccy, cr) {
   const dx = hx - ccx;
   const dy = hy - ccy;
-  const forgive = chaosHasDebuff('tight_collision') ? 0 : 4; // 충돌 봐주기 제거(혼돈 디버프)
+  let forgive = chaosHasDebuff('tight_collision') ? 0 : 4;
+  if (gameMode === 'hard') forgive *= 0.5;
+  if (IS_MOBILE) forgive *= 1.2;
   const r = HEAD_RADIUS + cr - forgive;
   return (dx * dx + dy * dy) < (r * r);
 }
@@ -3208,6 +3208,7 @@ function restartTutorialStep3Challenge() {
   lastScoreTime = 0;
   staticObs = [];
   floatingTexts = [];
+  gemShards = [];
   tutorialStep3State = 'play';
   ensureTutorialStep2Obstacles(TUTORIAL_S3_TARGET);
 }
@@ -3237,6 +3238,7 @@ function triggerGameOver(cause) {
     score = 0;
     spawnTimer = 0;
     floatingTexts = [];
+  gemShards = [];
     combo = 0;
     lastScoreTime = 0;
     if (tutorialStep === 2) {
@@ -3269,9 +3271,8 @@ function triggerGameOver(cause) {
   // 업적: 연습·로그라이크 제외. 개별 업적의 모드 제한은 checkAchievementsAfterRun에서 처리.
   if (!tutorialMode && gameMode !== 'practice' && gameMode !== 'roguelike') {
     checkAchievementsAfterRun(score, maxComboThisRun, comboBonusPointsThisRun);
-    // 비늘 재화: 5점당 1개(내림). 하드/혼돈은 1.5배(내림). 연습/튜토리얼 제외. (예: 37점 → 일반 7 / 하드·혼돈 11)
-    const scaleMult = (gameMode === 'hard' || gameMode === 'chaos') ? 1.5 : 1;
-    addScales(Math.floor((score / 5) * scaleMult));
+    // 토큰: 5점당 1개. 하드/혼돈 1.5배. 연습·로그라이크·멀티는 주지 않음.
+    if (gameMode !== 'multi') grantRunTokens(calcTokenGain(score, tokenPlayMs));
   }
   gameOver = true;
   paused = false;
@@ -3488,19 +3489,67 @@ function showAchievementToastFromCardId(id) {
   }, 2600);
 }
 
+function showRelicUnlockToast(def) {
+  const root = document.getElementById('achievement-toast-root');
+  if (!root || !def || !def.rgb) return;
+  const rgb = def.rgb;
+  const toast = document.createElement('div');
+  toast.className = 'achievement-card achievement-toast';
+  toast.setAttribute('role', 'status');
+  const row = document.createElement('div');
+  row.className = 'achievement-title-row';
+  const title = document.createElement('span');
+  title.className = 'achievement-title';
+  title.textContent = def.name;
+  const kind = document.createElement('span');
+  kind.className = 'achievement-kind';
+  kind.textContent = '보석';
+  const desc = document.createElement('p');
+  desc.className = 'achievement-desc';
+  desc.textContent = '보석이 열렸습니다.';
+  row.appendChild(title);
+  row.appendChild(kind);
+  toast.appendChild(row);
+  toast.appendChild(desc);
+  const bg = [
+    Math.round(rgb[0] * 0.28),
+    Math.round(rgb[1] * 0.28),
+    Math.round(rgb[2] * 0.28)
+  ];
+  const ink = [
+    Math.round(rgb[0] * 0.55 + 255 * 0.45),
+    Math.round(rgb[1] * 0.55 + 255 * 0.45),
+    Math.round(rgb[2] * 0.55 + 255 * 0.45)
+  ];
+  toast.style.borderColor = 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',0.7)';
+  toast.style.backgroundColor = 'rgb(' + bg[0] + ',' + bg[1] + ',' + bg[2] + ')';
+  title.style.color = 'rgb(250,250,250)';
+  kind.style.color = 'rgb(' + ink[0] + ',' + ink[1] + ',' + ink[2] + ')';
+  desc.style.color = 'rgb(' + ink[0] + ',' + ink[1] + ',' + ink[2] + ')';
+  root.appendChild(toast);
+  setTimeout(() => {
+    if (toast.parentNode) toast.parentNode.removeChild(toast);
+  }, 2600);
+}
+
 function reorderAchievementCards() {
   const container = document.querySelector('#achievements-panel .achievements-scroll');
   if (!container) return;
   const cards = Array.from(container.querySelectorAll('.achievement-card'));
   if (cards.length <= 1) return;
-  const done = cards.filter(function (c) {
+  const hidden = function (c) {
+    return c.getAttribute('data-achievement-hidden') === 'true';
+  };
+  const done = function (c) {
     return c.classList.contains('achievement-done');
-  });
-  const todo = cards.filter(function (c) {
-    return !c.classList.contains('achievement-done');
-  });
+  };
+  const ordered = []
+    .concat(cards.filter(function (c) { return !hidden(c) && done(c); }))
+    .concat(cards.filter(function (c) { return !hidden(c) && !done(c); }))
+    .concat(cards.filter(function (c) { return hidden(c) && done(c); }))
+    .concat(cards.filter(function (c) { return hidden(c) && !done(c); }));
   const frag = document.createDocumentFragment();
-  done.concat(todo).forEach(function (el) {
+  ordered.forEach(function (el) {
     frag.appendChild(el);
   });
   container.appendChild(frag);
@@ -3666,7 +3715,7 @@ function rogueHasOnlyLevel2Augments() {
 function noteRogueSingleObstacleScore(pts) {
   if (!isRogue() || tutorialMode || !(pts > 0)) return;
   rogueMaxSingleObsPtsThisRun = Math.max(rogueMaxSingleObsPtsThisRun, pts);
-  if (pts >= 13) unlockAchievement('rogue_one_shot_13');
+  if (pts >= 15) unlockAchievement('rogue_one_shot_13');
 }
 
 /** 증강 선택 직후 즉시 달성 가능 업적 */
@@ -3685,7 +3734,7 @@ function checkRogueLiveTimeAchievements() {
 function checkRogueAchievementsAfterRun() {
   if (tutorialMode || gameMode !== 'roguelike') return;
   if (countRogueAugmentsAtLevel(3) >= 2) unlockAchievement('rogue_ssam');
-  if (rogueMaxSingleObsPtsThisRun >= 13) unlockAchievement('rogue_one_shot_13');
+  if (rogueMaxSingleObsPtsThisRun >= 15) unlockAchievement('rogue_one_shot_13');
   if (rogueRunMs >= ROGUE_GOD_MS || getRogueBestMs() >= ROGUE_GOD_MS) {
     unlockAchievement('rogue_god');
   }
@@ -3697,10 +3746,16 @@ function checkRogueAchievementsAfterRun() {
   }
 }
 
+function roundScore(n) {
+  return Math.round(n * 100) / 100;
+}
+
 function formatScoreForMenu(n) {
   if (!Number.isFinite(n)) return '0';
-  const r = Math.round(n * 10) / 10;
-  return Number.isInteger(r) ? String(r) : r.toFixed(1).replace(/\.0$/, '');
+  const r = roundScore(n);
+  if (Number.isInteger(r)) return String(r);
+  const s = r.toFixed(2);
+  return s.endsWith('0') ? s.slice(0, -1) : s;
 }
 
 function updateMenuHighScoreDisplay() {
@@ -3801,6 +3856,7 @@ function resetSnake() {
   spawnTimer = 0;
   staticObs = [];
   floatingTexts = [];
+  gemShards = [];
   combo = 0;
   comboSoundStep = 0;
   lastScoreTime = 0;
@@ -3813,6 +3869,9 @@ function resetSnake() {
   wrongHalfAccumMs = 0;
   mainRunSteerDUsed = false;
   zeroScoreHoldMs = 0;
+  tokenPlayMs = 0;
+  opalInvulnUntil = 0;
+  applyChaseStartScore();
   animateLastFrameTime = 0;
   if (gameMode === 'roguelike') resetRogueState();
 }
@@ -3846,6 +3905,7 @@ function initTutorialStep1Intro() {
   spawnTimer = 0;
   staticObs = [];
   floatingTexts = [];
+  gemShards = [];
   combo = 0;
   lastScoreTime = 0;
   scoreStart = performance.now();
@@ -3887,6 +3947,7 @@ function initHardTutorial() {
   spawnTimer = 0;
   staticObs = [];
   floatingTexts = [];
+  gemShards = [];
   combo = 0;
   lastScoreTime = 0;
   scoreStart = performance.now();
@@ -3928,6 +3989,7 @@ function initChaosTutorial() {
   spawnTimer = 0;
   staticObs = [];
   floatingTexts = [];
+  gemShards = [];
   combo = 0;
   lastScoreTime = 0;
   scoreStart = performance.now();
@@ -3973,6 +4035,7 @@ function initRogueTutorial() {
   spawnTimer = 0;
   staticObs = [];
   floatingTexts = [];
+  gemShards = [];
   combo = 0;
   lastScoreTime = 0;
   scoreStart = performance.now();
@@ -4083,6 +4146,86 @@ document.addEventListener('keyup', e => {
   if (e.key === 'Escape') escMenuHoldStart = 0;
 });
 
+function restartRunFromOverlay() {
+  playMenuUiSound('primary');
+  pickChaosDebuffsForRun();
+  runSegmentDist = SEGMENT_DIST;
+  chaosTurnVel = 0;
+  chaosTurnHoldMs = 0;
+  chaosIntroStartMs = gameMode === 'chaos' ? performance.now() : 0;
+  chaosIntroUntil = gameMode === 'chaos' ? (chaosIntroStartMs + 3000) : 0;
+  chaosIntroWasActive = gameMode === 'chaos' && chaosIntroUntil > 0;
+  resetSnake();
+}
+
+// 일시정지/게임오버 안내 문구. 맞으면 true.
+// 모바일은 터치 이동 시 click이 취소되므로 터치에서도 이 함수를 쓴다.
+function handleOverlayPointer(x, y) {
+  if (!gameRunning || (!paused && !gameOver)) return false;
+  if (tutorialModal && !tutorialModal.classList.contains('hidden')) return false;
+
+  const cx = canvas.width * 0.5;
+  const baseY = canvas.height * 0.5;
+
+  function hitText(str, fontPx, ty) {
+    ctx.save();
+    ctx.font = `700 ${fontPx}px Nunito, sans-serif`;
+    const w = ctx.measureText(str).width;
+    ctx.restore();
+    const padX = 36;
+    const x1 = cx - w / 2 - padX;
+    const x2 = cx + w / 2 + padX;
+    const y1 = ty - fontPx - 4;
+    const y2 = ty + 8;
+    return x >= x1 && x <= x2 && y >= y1 && y <= y2;
+  }
+
+  if (gameOver) {
+    if (isOnlineMode()) return false;
+    const restartStr = 'SPACE를 눌러 재시작';
+    const mainStr = 'ESC로 메인 화면';
+    const restartY = baseY + px(45);
+    const mainY = baseY + px(78);
+    if (hitText(restartStr, px(15), restartY)) {
+      restartRunFromOverlay();
+      return true;
+    }
+    if (hitText(mainStr, px(15), mainY)) {
+      playMenuUiSound('soft');
+      returnToMainMenu();
+      return true;
+    }
+    return false;
+  }
+
+  const contStr = 'SPACE로 계속하기';
+  const contY = baseY + px(12);
+  const mainStr = 'ESC키를 꾹 눌러 메인화면';
+  const mainY = baseY + px(44);
+  if (hitText(contStr, px(16), contY)) {
+    playMenuUiSound('primary');
+    paused = false;
+    escMenuHoldStart = 0;
+    return true;
+  }
+  if (hitText(mainStr, px(15), mainY)) {
+    playMenuUiSound('soft');
+    returnToMainMenu();
+    return true;
+  }
+  return false;
+}
+
+function canvasPointFromClient(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const sx = canvas.width / Math.max(1, rect.width);
+  const sy = canvas.height / Math.max(1, rect.height);
+  return {
+    x: (clientX - rect.left) * sx,
+    y: (clientY - rect.top) * sy
+  };
+}
+
 // PC: pause/gameover 화면의 안내 문구를 마우스로 클릭해도 동작하게
 if (canvas) {
   canvas.addEventListener('click', (e) => {
@@ -4105,74 +4248,8 @@ if (canvas) {
       return;
     }
 
-    if (!paused && !gameOver) return;
-    if (tutorialModal && !tutorialModal.classList.contains('hidden')) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const sx = canvas.width / Math.max(1, rect.width);
-    const sy = canvas.height / Math.max(1, rect.height);
-    const x = (e.clientX - rect.left) * sx;
-    const y = (e.clientY - rect.top) * sy;
-
-    const cx = canvas.width * 0.5;
-    const baseY = canvas.height * 0.5;
-
-    function hitText(str, fontPx, ty) {
-      ctx.save();
-      ctx.font = `700 ${fontPx}px Nunito, sans-serif`;
-      const w = ctx.measureText(str).width;
-      ctx.restore();
-      const padX = 18;
-      const padY = 12;
-      const x1 = cx - w / 2 - padX;
-      const x2 = cx + w / 2 + padX;
-      const y1 = ty - padY;
-      const y2 = ty + padY;
-      return x >= x1 && x <= x2 && y >= y1 && y <= y2;
-    }
-
-    if (gameOver) {
-      if (isOnlineMode()) return; // Online: only Space key restarts
-      const restartStr = 'SPACE를 눌러 재시작';
-      const mainStr = 'ESC로 메인 화면';
-      const restartY = baseY + px(45);
-      const mainY = baseY + px(78);
-      if (hitText(restartStr, px(15), restartY)) {
-        playMenuUiSound('primary');
-        pickChaosDebuffsForRun();
-        runSegmentDist = SEGMENT_DIST;
-        chaosTurnVel = 0;
-        chaosTurnHoldMs = 0;
-        chaosIntroStartMs = gameMode === 'chaos' ? performance.now() : 0;
-        chaosIntroUntil = gameMode === 'chaos' ? (chaosIntroStartMs + 3000) : 0;
-        chaosIntroWasActive = gameMode === 'chaos' && chaosIntroUntil > 0;
-        resetSnake();
-        return;
-      }
-      if (hitText(mainStr, px(15), mainY)) {
-        playMenuUiSound('soft');
-        returnToMainMenu();
-        return;
-      }
-      return;
-    }
-
-    // paused
-    const contStr = 'SPACE로 계속하기';
-    const contY = baseY + px(12);
-    const mainStr = 'ESC키를 꾹 눌러 메인화면';
-    const mainY = baseY + px(44);
-    if (hitText(contStr, px(16), contY)) {
-      playMenuUiSound('primary');
-      paused = false;
-      escMenuHoldStart = 0;
-      return;
-    }
-    if (hitText(mainStr, px(15), mainY)) {
-      playMenuUiSound('soft');
-      returnToMainMenu();
-      return;
-    }
+    const p = canvasPointFromClient(e.clientX, e.clientY);
+    handleOverlayPointer(p.x, p.y);
   }, { passive: true });
 }
 
@@ -4181,6 +4258,10 @@ if (IS_MOBILE && canvas) {
   let leftActive = false;
   let rightActive = false;
   let bothPrev = false;
+  let leftDownAt = 0;
+  let rightDownAt = 0;
+  // 이 시간 안에 양쪽이 같이 눌려야 일시정지. 한쪽을 유지한 채 다른 쪽을 누르는 건 제외.
+  const BOTH_TAP_WINDOW_MS = 80;
 
   function recomputeSides() {
     leftActive = false;
@@ -4242,17 +4323,43 @@ if (IS_MOBILE && canvas) {
       return;
     }
 
+    // 게임오버/일시정지 문구. touchmove가 click을 취소하므로 터치에서 직접 처리한다.
+    if (gameOver || paused) {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        const p = canvasPointFromClient(t.clientX, t.clientY);
+        if (handleOverlayPointer(p.x, p.y)) {
+          e.preventDefault();
+          return;
+        }
+      }
+    }
+
     const rect = canvas.getBoundingClientRect();
+    let hadLeft = false;
+    let hadRight = false;
+    activeTouches.forEach((side) => {
+      if (side === 'left') hadLeft = true;
+      else if (side === 'right') hadRight = true;
+    });
+    let addedLeft = false;
+    let addedRight = false;
+    const now = performance.now();
     for (let i = 0; i < e.changedTouches.length; i++) {
       const t = e.changedTouches[i];
       const x = t.clientX - rect.left;
       const side = (x < rect.width / 2) ? 'left' : 'right';
+      if (side === 'left') addedLeft = true;
+      else addedRight = true;
       activeTouches.set(t.identifier, side);
     }
+    if (addedLeft && !hadLeft) leftDownAt = now;
+    if (addedRight && !hadRight) rightDownAt = now;
     recomputeSides();
     const bothNow = leftActive && rightActive;
+    const tappedTogether = bothNow && !bothPrev && Math.abs(leftDownAt - rightDownAt) <= BOTH_TAP_WINDOW_MS;
 
-    if (bothNow && !bothPrev && gameRunning && !gameOver && !isOnlineMode()) {
+    if (tappedTogether && gameRunning && !gameOver && !isOnlineMode()) {
       paused = !paused;
     }
     bothPrev = bothNow;
@@ -4292,6 +4399,7 @@ if (typeof document !== 'undefined') {
         if (scoreStart > 0) scoreStart += away;
         if (gameStartDelayUntil > 0) gameStartDelayUntil += away;
         if (rogueInvulnUntil > 0) rogueInvulnUntil += away;
+        if (opalInvulnUntil > 0) opalInvulnUntil += away;
         if (rogueHitFlashUntil > 0) rogueHitFlashUntil += away;
         if (typeof chaosIntroUntil === 'number' && chaosIntroUntil > 0) chaosIntroUntil += away;
       }
@@ -4311,6 +4419,7 @@ function animate() {
     return;
   }
 
+  try {
   const _frameNow = performance.now();
   if (animateLastFrameTime <= 0) animateLastFrameTime = _frameNow;
   const _rawDelta = Math.max(0, _frameNow - animateLastFrameTime);
@@ -4323,6 +4432,7 @@ function animate() {
     if (scoreStart > 0) scoreStart += _skip;
     if (gameStartDelayUntil > 0) gameStartDelayUntil += _skip;
     if (rogueInvulnUntil > 0) rogueInvulnUntil += _skip;
+    if (opalInvulnUntil > 0) opalInvulnUntil += _skip;
     if (rogueHitFlashUntil > 0) rogueHitFlashUntil += _skip;
     if (typeof chaosIntroUntil === 'number' && chaosIntroUntil > 0) chaosIntroUntil += _skip;
     spawnTimer = 0;
@@ -4443,6 +4553,7 @@ function animate() {
         scoreStart = performance.now();
         score = 0;
         floatingTexts = [];
+  gemShards = [];
       }
     }
   }
@@ -4497,6 +4608,7 @@ function animate() {
     !tutorialFreeze &&
     !chaosIntroActive &&
     !rogueAugmentActive;
+  if (playing) tokenPlayMs += frameDeltaMs;
 
   // 로그라이크: 게이지 감소 + 시작 시 1개/이후 15초마다 증강, 선택 시 감소량 증가
   if (playing && isRogue()) {
@@ -4628,6 +4740,8 @@ function animate() {
         practiceWallWrap();
       } else if (isRogue()) {
         rogueWallWrap();
+      } else if (tryOpalRevive()) {
+        opalWallWrap();
       } else {
         if (localPlayEnabled) triggerLocalDeath('white');
         else triggerGameOver();
@@ -4686,8 +4800,9 @@ function animate() {
               hitFound = true;
               break;
             }
-            if (obs.isGolden) unlockAchievement('hidden_golden_death');
-            if (localPlayEnabled) triggerLocalDeath('white');
+            if (tryOpalRevive()) {
+              if (!(opalInvulnUntil > performance.now())) opalClearObstacle(obs);
+            } else if (localPlayEnabled) triggerLocalDeath('white');
             else triggerGameOver();
             hitFound = true;
             break;
@@ -4735,7 +4850,7 @@ function animate() {
           ? COMBO_TIMEOUT_MS * practiceSettings.comboHoldMult
           : chaosHasDebuff('combo_short')
             ? 1250
-            : COMBO_TIMEOUT_MS) + (isRogue() ? rogueComboExtraMs : 0);
+            : COMBO_TIMEOUT_MS) + (isRogue() ? rogueComboExtraMs : 0) + relicEchoMs();
 
       function minEdgeDistForHead(obs, hx, hy) {
         let m = Infinity;
@@ -4749,7 +4864,7 @@ function animate() {
       }
 
       function basePtsFromMinEdge(minEdgeDist) {
-        const ratio = minEdgeDist / HEAD_WIDTH;
+        const ratio = minEdgeDist / (HEAD_WIDTH * relicScoreRangeMult());
         const elapsed = gameMode === 'practice' ? 0 : (nowMs - scoreStart) / 1000;
         let base, bonus;
         // 점수 구간을 소폭 확장 (기존 3/2/1 → 3.6/2.4/1.2)
@@ -4773,10 +4888,16 @@ function animate() {
           if (obs.fadeOut) continue;
 
           const minEdgeDist = minEdgeDistForHead(obs, hx, hy);
-          if (minEdgeDist <= HEAD_WIDTH * (isRogue() ? rogueSniperMaxRatio : 5)) {
+          if (minEdgeDist <= HEAD_WIDTH * (isRogue() ? rogueSniperMaxRatio : 5) * relicScoreRangeMult()) {
             const pts0 = basePtsFromMinEdge(minEdgeDist);
             if (!obs[nearKey]) obs[nearKey] = nowMs;
             obs[bestKey] = Math.max(obs[bestKey] || 0, pts0);
+            // 구역 안에 있는 동안에는 콤보 유지 시간이 줄어들지 않음
+            if (isGray) {
+              if (localLastScoreTimeGray > 0) localLastScoreTimeGray = nowMs;
+            } else if (lastScoreTime > 0) {
+              lastScoreTime = nowMs;
+            }
           } else {
             if (obs[nearKey] && (nowMs - obs[nearKey]) >= 150) {
               if (!obs.fadeOut) {
@@ -4803,7 +4924,7 @@ function animate() {
                       const comboBonus = localComboGrayValue >= 2 ? (localComboGrayValue - 1) * 0.5 : 0;
                       const pts = (obs[bestKey] || (chaosHasDebuff('no_half_point') ? 1 : 0.5)) + comboBonus;
                       if (!(tutorialMode && tutorialStep === 3)) {
-                        localScoreGrayValue += pts;
+                        localScoreGrayValue = roundScore(localScoreGrayValue + pts);
                         if (
                           localPlayEnabled &&
                           !localWinner &&
@@ -4814,7 +4935,7 @@ function animate() {
                         }
                         floatingTexts.push({
                           x: hx, y: hy - 20,
-                          text: '+' + pts,
+                          text: '+' + formatScoreForMenu(pts),
                           life: FLOAT_TEXT_LIFE,
                           color: [120, 120, 120]
                         });
@@ -4830,7 +4951,8 @@ function animate() {
                         maxComboThisRun = Math.max(maxComboThisRun, combo);
                       }
                       lastScoreTime = nowMs;
-                      const comboBonus = combo >= 2 ? (combo - 1) * 0.5 : 0;
+                      const comboStep = 0.5;
+                      const comboBonus = combo >= 2 ? (combo - 1) * comboStep : 0;
                       let pts = (obs[bestKey] || (chaosHasDebuff('no_half_point') ? 1 : 0.5)) + comboBonus;
                       // 로그라이크 표식: 표식당 추가 점수, 소모 시 Lv.3 전이(35%)
                       if (isRogue() && rogueMarkBonus > 0) {
@@ -4853,8 +4975,10 @@ function animate() {
                         noteRogueSingleObstacleScore(pts);
                       }
                       if (!(tutorialMode && tutorialStep === 3)) {
+                        const ruby = rollRubyScore(pts);
+                        pts = ruby.pts;
                         const scoreBefore = score;
-                        score += pts;
+                        score = roundScore(score + pts);
                         if (isRogue()) {
                           rogueGauge = Math.min(rogueMaxGauge, rogueGauge + pts);
                         }
@@ -4873,8 +4997,8 @@ function animate() {
                           !localPlayEnabled &&
                           !tutorialMode &&
                           gameMode === 'normal' &&
-                          scoreBefore === 0 &&
-                          score > 0
+                          !halfLaneLock &&
+                          score > scoreBefore
                         ) {
                           halfLaneLock =
                             points[0].x < canvas.width * 0.5 ? 'left' : 'right';
@@ -4892,11 +5016,28 @@ function animate() {
                             consecutiveMovingObsPasses = 0;
                           }
                         }
-                        floatingTexts.push({
-                          x: hx, y: hy - 20,
-                          text: '+' + pts,
-                          life: FLOAT_TEXT_LIFE
-                        });
+                        const scorePop = '+' + formatScoreForMenu(ruby.base);
+                        for (let pop = 0; pop < ruby.mult; pop++) {
+                          floatingTexts.push({
+                            x: hx, y: hy - 20,
+                            text: scorePop,
+                            life: FLOAT_TEXT_LIFE,
+                            delay: pop * 250
+                          });
+                        }
+                        if (obs.relicId) {
+                          const relicNote = grantRelicFragment(obs);
+                          const relic = relicDef(obs.relicId);
+                          if (relicNote) {
+                            floatingTexts.push({
+                              x: hx, y: hy - 20,
+                              text: relicNote,
+                              life: FLOAT_TEXT_LIFE,
+                              delay: (ruby.mult - 1) * 250 + 500,
+                              color: relic ? relic.rgb : [196, 181, 253]
+                            });
+                          }
+                        }
                       }
                     }
                     obs.fadeOut = OBS_FADE_FRAMES;
@@ -5063,6 +5204,14 @@ function animate() {
 
   // White snake above obstacles
   drawSnakeBody(points, [255, 255, 255]);
+  if (opalInvulnUntil > performance.now()) {
+    ctx.save();
+    ctx.shadowColor = 'rgba(251, 191, 36, 0.9)';
+    ctx.shadowBlur = 16;
+    ctx.globalAlpha = 0.55;
+    drawSnakeBody(points, [253, 210, 90]);
+    ctx.restore();
+  }
   // 로그라이크 보호막: 몸이 약간 금색으로 빛남
   if (!localPlayEnabled && isRogue() && rogueShieldCharges > 0) {
     ctx.save();
@@ -5248,6 +5397,10 @@ function animate() {
   // Draw floating score texts
   for (let i = floatingTexts.length - 1; i >= 0; i--) {
     const ft = floatingTexts[i];
+    if (ft.delay > 0) {
+      if (playing) ft.delay -= frameDeltaMs;
+      continue;
+    }
     if (playing) {
       // 60fps 기준(1px/프레임, life 60≈1초)을 시간 기반으로 환산 → 주사율 무관
       ft.y -= frameFactor;
@@ -5260,6 +5413,34 @@ function animate() {
     else ctx.fillStyle = `rgba(255,255,255,${a})`;
     ctx.fillText(ft.text, ft.x, ft.y);
     if (ft.life <= 0) floatingTexts.splice(i, 1);
+  }
+  for (let i = gemShards.length - 1; i >= 0; i--) {
+    const s = gemShards[i];
+    if (playing) {
+      s.x += s.vx * frameFactor;
+      s.y += s.vy * frameFactor;
+      s.vy += 0.045 * frameFactor;
+      s.rot += s.vr * frameFactor;
+      s.life -= frameDeltaMs;
+    }
+    const img = s.img;
+    if (img && img.complete && img.naturalWidth && img.naturalHeight) {
+      const padX = img.naturalWidth * 0.06;
+      const padY = img.naturalHeight * 0.08;
+      const bw = img.naturalWidth - padX * 2;
+      const bh = img.naturalHeight - padY * 2;
+      const sw = bw / 3;
+      const dh = 78 * GAME_SCALE;
+      const dw = dh * (sw / bh);
+      const alpha = s.life > 200 ? 1 : Math.max(0, s.life / 200);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(s.x, s.y);
+      ctx.rotate(s.rot);
+      ctx.drawImage(img, padX + s.slice * sw, padY, sw, bh, -dw / 2, -dh / 2, dw, dh);
+      ctx.restore();
+    }
+    if (s.life <= 0) gemShards.splice(i, 1);
   }
 
   // 혼돈 디버프: 시야 축소(월드 렌더 후, HUD 전에 마스크)
@@ -5284,7 +5465,7 @@ function animate() {
       ? COMBO_TIMEOUT_MS * practiceSettings.comboHoldMult
       : chaosHasDebuff('combo_short')
         ? 1250
-        : COMBO_TIMEOUT_MS) + (isRogue() ? rogueComboExtraMs : 0);
+        : COMBO_TIMEOUT_MS) + (isRogue() ? rogueComboExtraMs : 0) + relicEchoMs();
   if (
     playing &&
     combo > 0 &&
@@ -5328,7 +5509,7 @@ function animate() {
 
     // White (left) — 스킨 적용
     ctx.font = window.Skins ? Skins.getScoreFont(40) : '900 40px Nunito, sans-serif';
-    const wScoreText = '' + score;
+    const wScoreText = formatScoreForMenu(score);
     const wScoreW = ctx.measureText(wScoreText).width;
     ctx.font = window.Skins ? Skins.getUnitFont(18) : '700 18px Nunito, sans-serif';
     const ptW = ctx.measureText('점').width;
@@ -5373,7 +5554,7 @@ function animate() {
 
     // Gray (right) — 스킨 미적용 (상대편 시각 구분)
     ctx.font = '900 40px Nunito, sans-serif';
-    const gScoreText = '' + localScoreGrayValue;
+    const gScoreText = formatScoreForMenu(localScoreGrayValue);
     const gScoreW = ctx.measureText(gScoreText).width;
     ctx.font = '700 18px Nunito, sans-serif';
     const gPtW = ctx.measureText('점').width;
@@ -5398,7 +5579,7 @@ function animate() {
     const rogueTop = isRogue();
     const unitText = rogueTop ? '초' : '점';
     ctx.font = window.Skins ? Skins.getScoreFont(40) : '900 40px Nunito, sans-serif';
-    const scoreText = rogueTop ? ('' + Math.floor(rogueRunMs / 1000)) : ('' + score);
+    const scoreText = rogueTop ? ('' + Math.floor(rogueRunMs / 1000)) : formatScoreForMenu(score);
     const scoreW = ctx.measureText(scoreText).width;
     ctx.font = window.Skins ? Skins.getUnitFont(18) : '700 18px Nunito, sans-serif';
     const ptW = ctx.measureText(unitText).width;
@@ -5522,7 +5703,7 @@ function animate() {
       ctx.fillStyle = 'rgba(255,255,255,0.65)';
       const reason =
         localWinReason === 'score'
-          ? '50점 달성'
+          ? (LOCAL_WIN_SCORE + '점 달성')
           : localWinReason === 'death'
             ? '상대 게임오버'
             : '';
@@ -5542,7 +5723,7 @@ function animate() {
 
       ctx.font = `700 ${px(22)}px Nunito, sans-serif`;
       ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      ctx.fillText(score + '점', canvas.width / 2, canvas.height / 2 + px(10));
+      ctx.fillText(formatScoreForMenu(score) + '점', canvas.width / 2, canvas.height / 2 + px(10));
     }
 
     ctx.font = `700 ${px(15)}px Nunito, sans-serif`;
@@ -5716,8 +5897,11 @@ function animate() {
 
   // 로그라이크 증강 선택 오버레이(최상단)
   drawRogueAugmentOverlay(ctx);
-
-  animationFrameId = requestAnimationFrame(animate);
+  } finally {
+    if (gameRunning && !(typeof document !== 'undefined' && document.hidden)) {
+      animationFrameId = requestAnimationFrame(animate);
+    }
+  }
 }
 
 // 게임 루프를 단일 인스턴스로 시작(기존 예약을 취소해 중복 루프 방지)
@@ -5747,17 +5931,14 @@ const menuInfoToggle = document.getElementById('menu-info-toggle');
 const menuInfoPanel = document.getElementById('menu-info-panel');
 const menuInfoWrap = document.getElementById('menu-info-wrap');
 const menuInfoClose = document.getElementById('menu-info-close');
-const menuInfoTabScore = document.getElementById('menu-info-tab-score');
-const menuInfoTabModes = document.getElementById('menu-info-tab-modes');
+const menuInfoTabInfo = document.getElementById('menu-info-tab-info');
 const menuInfoTabPatchnotes = document.getElementById('menu-info-tab-patchnotes');
-const menuInfoPaneScore = document.getElementById('menu-info-score');
-const menuInfoPaneModes = document.getElementById('menu-info-modes');
+const menuInfoPaneInfo = document.getElementById('menu-info-info');
 const menuInfoPanePatchnotes = document.getElementById('menu-info-patchnotes');
 
 function setMenuInfoTab(which) {
   const tabs = [
-    { id: 'score', tab: menuInfoTabScore, pane: menuInfoPaneScore },
-    { id: 'modes', tab: menuInfoTabModes, pane: menuInfoPaneModes },
+    { id: 'info', tab: menuInfoTabInfo, pane: menuInfoPaneInfo },
     { id: 'patchnotes', tab: menuInfoTabPatchnotes, pane: menuInfoPanePatchnotes }
   ];
   for (const { id, tab, pane } of tabs) {
@@ -5771,6 +5952,22 @@ function setMenuInfoTab(which) {
       pane.setAttribute('aria-hidden', active ? 'false' : 'true');
     }
   }
+}
+
+function setInfoBoxOpen(box, open) {
+  if (!box) return;
+  box.classList.toggle('is-open', open);
+  const head = box.querySelector(':scope > .info-box-head');
+  if (head) head.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function resetMenuInfoAccordions() {
+  if (!menuInfoPanel) return;
+  menuInfoPanel.querySelectorAll('[data-acc]').forEach(group => {
+    const boxes = group.querySelectorAll(':scope > .info-box');
+    const openFirst = group.dataset.acc === 'patch';
+    boxes.forEach((box, i) => setInfoBoxOpen(box, openFirst && i === 0));
+  });
 }
 
 function hideLoadingScreenSoon() {
@@ -5856,9 +6053,35 @@ const MENU_TITLE_MODE_SPAM_WINDOW_MS = 2000;
 /** 연타 후 툴팁 문구·모드 전환 잠금 유지 시간 */
 const MENU_TITLE_DIZZY_COOLDOWN_MS = 3000;
 
+function applyMenuTitleModeLabel() {
+  if (!menuTitleTooltipMode) return;
+  menuTitleTooltipMode.textContent = GAME_MODE_LABELS[gameMode] || '';
+  menuTitleTooltipMode.style.color = '';
+  menuTitleTooltipMode.classList.remove(
+    'menu-title-tooltip-mode-normal',
+    'menu-title-tooltip-mode-hard',
+    'menu-title-tooltip-mode-chaos',
+    'menu-title-tooltip-mode-roguelike',
+    'menu-title-tooltip-mode-multi',
+    'menu-title-tooltip-mode-practice'
+  );
+  const modeClass = {
+    normal: 'menu-title-tooltip-mode-normal',
+    hard: 'menu-title-tooltip-mode-hard',
+    chaos: 'menu-title-tooltip-mode-chaos',
+    roguelike: 'menu-title-tooltip-mode-roguelike',
+    multi: 'menu-title-tooltip-mode-multi',
+    practice: 'menu-title-tooltip-mode-practice'
+  }[gameMode];
+  if (modeClass) menuTitleTooltipMode.classList.add(modeClass);
+}
+
 function setMenuTitleTooltipOverride(text, untilMs) {
   if (menuTitleTooltipHint) menuTitleTooltipHint.textContent = text;
-  if (menuTitleTooltipMode) menuTitleTooltipMode.textContent = '';
+  if (menuTitleTooltipMode) {
+    menuTitleTooltipMode.textContent = '';
+    menuTitleTooltipMode.style.color = '';
+  }
   menuTitleTooltipOverrideUntil = untilMs;
 }
 
@@ -5866,22 +6089,7 @@ function clearMenuTitleTooltipOverrideIfNeeded(nowMs) {
   if (menuTitleTooltipOverrideUntil > 0 && nowMs >= menuTitleTooltipOverrideUntil) {
     menuTitleTooltipOverrideUntil = 0;
     if (menuTitleTooltipHint) menuTitleTooltipHint.textContent = '글자를 클릭해 모드를 고르세요';
-    // 모드 라벨/색 복구
-    if (menuTitleTooltipMode) menuTitleTooltipMode.textContent = GAME_MODE_LABELS[gameMode] || '';
-    if (menuTitleTooltipMode) {
-      menuTitleTooltipMode.classList.remove(
-        'menu-title-tooltip-mode-normal',
-        'menu-title-tooltip-mode-hard',
-        'menu-title-tooltip-mode-chaos',
-        'menu-title-tooltip-mode-multi',
-        'menu-title-tooltip-mode-practice'
-      );
-      if (gameMode === 'normal') menuTitleTooltipMode.classList.add('menu-title-tooltip-mode-normal');
-      else if (gameMode === 'hard') menuTitleTooltipMode.classList.add('menu-title-tooltip-mode-hard');
-      else if (gameMode === 'chaos') menuTitleTooltipMode.classList.add('menu-title-tooltip-mode-chaos');
-      else if (gameMode === 'multi') menuTitleTooltipMode.classList.add('menu-title-tooltip-mode-multi');
-      else menuTitleTooltipMode.classList.add('menu-title-tooltip-mode-practice');
-    }
+    applyMenuTitleModeLabel();
   }
 }
 
@@ -6119,20 +6327,7 @@ function syncMenuTitleColorFromGameMode() {
       return;
     }
     menuTitleTooltipMode.textContent = GAME_MODE_LABELS[gameMode] || '';
-    menuTitleTooltipMode.classList.remove(
-      'menu-title-tooltip-mode-normal',
-      'menu-title-tooltip-mode-hard',
-      'menu-title-tooltip-mode-chaos',
-      'menu-title-tooltip-mode-multi',
-      'menu-title-tooltip-mode-practice'
-    );
-    menuTitleTooltipMode.style.color = '';
-    if (gameMode === 'normal') menuTitleTooltipMode.classList.add('menu-title-tooltip-mode-normal');
-    else if (gameMode === 'hard') menuTitleTooltipMode.classList.add('menu-title-tooltip-mode-hard');
-    else if (gameMode === 'chaos') menuTitleTooltipMode.classList.add('menu-title-tooltip-mode-chaos');
-    else if (gameMode === 'multi') menuTitleTooltipMode.classList.add('menu-title-tooltip-mode-multi');
-    else if (gameMode === 'practice') menuTitleTooltipMode.classList.add('menu-title-tooltip-mode-practice');
-    else if (gameMode === 'roguelike') menuTitleTooltipMode.style.color = GAME_MODE_TITLE_COLORS.roguelike;
+    applyMenuTitleModeLabel();
   }
   syncMenuStartLockState();
 }
@@ -6213,7 +6408,7 @@ function cycleGameModeFromTitleClick() {
   updatePracticePanelVisibility();
 }
 
-// ===== 메뉴 허브 (업적 / 꾸미기 / 퀘스트 / 상세정보 2x2) =====
+// ===== 메뉴 허브 (업적 / 보석 / 퀘스트 / 뽑기 2x2) =====
 const menuHubWrap = document.getElementById('menu-hub-wrap');
 const menuHubToggle = document.getElementById('menu-hub-toggle');
 const menuHubPanel = document.getElementById('menu-hub-panel');
@@ -6229,13 +6424,14 @@ const menuGachaPanel = document.getElementById('menu-gacha-panel');
 const hubPanels = {
   grid: menuHubPanel,
   achievements: achievementsPanel,
-  customize: menuCustomizePanel,
+  gems: menuCustomizePanel,
   quest: menuQuestPanel,
   gacha: menuGachaPanel
 };
 let hubView = null;
 function setHubView(view) {
   hubView = view;
+  if (view === 'gems') renderRelicPanel();
   for (const key in hubPanels) {
     const p = hubPanels[key];
     if (!p) continue;
@@ -6264,7 +6460,6 @@ if (menuHubPanel) {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       const hub = btn.getAttribute('data-hub');
-      if (hub === 'customize' && !FEATURES.customize) return;
       if (hub === 'gacha' && !FEATURES.gacha) return;
       playMenuUiSound('primary');
       setHubView(hub);
@@ -6294,7 +6489,10 @@ if (menuInfoToggle && menuInfoPanel) {
     playMenuUiSound('soft');
     const next = !menuInfoPanel.classList.contains('is-open');
     setHubView(null); // 허브 열려있으면 닫기
-    if (next) setMenuInfoTab('score');
+    if (next) {
+      setMenuInfoTab('info');
+      resetMenuInfoAccordions();
+    }
     setMenuInfoOpen(next);
   });
 }
@@ -6305,7 +6503,7 @@ if (menuInfoClose) {
     setMenuInfoOpen(false);
   });
 }
-[[menuInfoTabScore, 'score'], [menuInfoTabModes, 'modes'], [menuInfoTabPatchnotes, 'patchnotes']].forEach(([tab, id]) => {
+[[menuInfoTabInfo, 'info'], [menuInfoTabPatchnotes, 'patchnotes']].forEach(([tab, id]) => {
   if (!tab) return;
   tab.addEventListener('click', e => {
     e.stopPropagation();
@@ -6313,6 +6511,19 @@ if (menuInfoClose) {
     setMenuInfoTab(id);
   });
 });
+if (menuInfoPanel) {
+  menuInfoPanel.addEventListener('click', e => {
+    const head = e.target.closest('.info-box-head');
+    if (!head || !menuInfoPanel.contains(head)) return;
+    e.stopPropagation();
+    const box = head.closest('.info-box');
+    const group = box && box.parentElement;
+    if (!box || !group || !group.dataset || !group.dataset.acc) return;
+    const willOpen = !box.classList.contains('is-open');
+    playMenuUiSound('soft');
+    group.querySelectorAll(':scope > .info-box').forEach(el => setInfoBoxOpen(el, willOpen && el === box));
+  });
+}
 
 // 바깥 클릭 시 허브 닫기 (모바일: 패널이 body로 이동돼 있으므로 각 패널도 함께 검사)
 document.addEventListener('click', e => {
@@ -6344,7 +6555,7 @@ document.addEventListener('click', e => {
 });
 
 // ============================================================
-// 비늘(재화) & 꾸미기(뱀 머리 장신구)
+// 토큰(재화) & 꾸미기(뱀 머리 장신구)
 // ============================================================
 const SCALES_KEY = 'snakombo_scales_v1';
 function getScales() {
@@ -6368,11 +6579,141 @@ function addScales(n) {
   if (!(n > 0)) return getScales();
   return setScales(getScales() + n);
 }
+let tokenFlyPending = 0;
+let tokenFlyShown = null;
+let tokenFlyRaf = 0;
+function shownScales() {
+  if (tokenFlyShown != null) return tokenFlyShown;
+  return Math.max(0, getScales() - tokenFlyPending);
+}
+function grantRunTokens(n) {
+  if (!FEATURES.scales) return 0;
+  n = Math.floor(n);
+  if (!(n > 0)) return getScales();
+  tokenFlyPending += n;
+  return setScales(getScales() + n);
+}
+function settleTokenFly() {
+  if (tokenFlyRaf) cancelAnimationFrame(tokenFlyRaf);
+  tokenFlyRaf = 0;
+  const root = document.getElementById('token-fly-root');
+  if (root) root.remove();
+  tokenFlyPending = 0;
+  tokenFlyShown = null;
+  updateScalesUI();
+}
+function playTokenFly() {
+  const amount = tokenFlyPending;
+  if (!(amount > 0)) return;
+  const target = document.getElementById('scales-display');
+  if (!target) {
+    settleTokenFly();
+    return;
+  }
+  if (tokenFlyRaf) cancelAnimationFrame(tokenFlyRaf);
+  const old = document.getElementById('token-fly-root');
+  if (old) old.remove();
+  const from = Math.max(0, getScales() - amount);
+  const to = getScales();
+  tokenFlyShown = from;
+  updateScalesUI();
+  const root = document.createElement('div');
+  root.id = 'token-fly-root';
+  document.body.appendChild(root);
+  const count = Math.min(amount, 40);
+  const coins = [];
+  const spread = 78 + Math.min(count, 16) * 3;
+  let worthLeft = amount;
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement('img');
+    el.className = 'token-fly-coin';
+    el.src = 'assets/icons/token.png';
+    el.alt = '';
+    root.appendChild(el);
+    const ang = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.35;
+    const dist = spread * (0.72 + Math.random() * 0.38);
+    const share = Math.ceil(worthLeft / (count - i));
+    worthLeft -= share;
+    coins.push({
+      el: el,
+      ox: Math.cos(ang) * dist,
+      oy: Math.sin(ang) * dist * 0.72,
+      delay: (i % 8) * 0.035,
+      worth: share,
+      landed: false
+    });
+  }
+  const t0 = performance.now();
+  let gained = 0;
+  function frame(now) {
+    const rect = target.getBoundingClientRect();
+    const tx = rect.left + rect.width * 0.28;
+    const ty = rect.top + rect.height * 0.5;
+    const cx = window.innerWidth * 0.5;
+    const cy = window.innerHeight * 0.5;
+    let moving = false;
+    for (let i = 0; i < coins.length; i++) {
+      const c = coins[i];
+      if (c.landed) {
+        c.el.style.opacity = '0';
+        continue;
+      }
+      moving = true;
+      const local = (now - t0) / 1000 - c.delay;
+      let x;
+      let y;
+      let scale = 1.05;
+      if (local <= 0) {
+        x = cx;
+        y = cy;
+        c.el.style.opacity = '0';
+      } else if (local < 0.32) {
+        const e = 1 - Math.pow(1 - local / 0.32, 3);
+        x = cx + c.ox * e;
+        y = cy + c.oy * e;
+        scale = 0.7 + 0.4 * e;
+        c.el.style.opacity = String(Math.min(1, local / 0.12));
+      } else {
+        const p = Math.min(1, (local - 0.32) / 0.5);
+        const e = 1 - Math.pow(1 - p, 3);
+        x = cx + c.ox + (tx - cx - c.ox) * e;
+        y = cy + c.oy + (ty - cy - c.oy) * e;
+        scale = 1.1 - 0.35 * e;
+        c.el.style.opacity = '1';
+        if (p >= 1) {
+          c.landed = true;
+          gained += c.worth;
+          tokenFlyShown = from + gained;
+          const countEl = document.getElementById('scales-count');
+          if (countEl) countEl.textContent = String(tokenFlyShown);
+          c.el.style.opacity = '0';
+        }
+      }
+      c.el.style.transform = 'translate(' + x + 'px,' + y + 'px) translate(-50%,-50%) scale(' + scale + ')';
+    }
+    if (moving) {
+      tokenFlyRaf = requestAnimationFrame(frame);
+      return;
+    }
+    root.remove();
+    tokenFlyRaf = 0;
+    tokenFlyPending = Math.max(0, tokenFlyPending - amount);
+    tokenFlyShown = null;
+    updateScalesUI();
+  }
+  tokenFlyRaf = requestAnimationFrame(frame);
+}
 function updateScalesUI() {
   const el = document.getElementById('scales-count');
-  if (el) el.textContent = String(getScales());
+  if (el) el.textContent = String(shownScales());
   const wrap = document.getElementById('scales-display');
-  if (wrap) wrap.style.display = FEATURES.scales ? '' : 'none';
+  if (wrap) {
+    wrap.classList.toggle('hidden', !FEATURES.scales);
+    wrap.style.display = FEATURES.scales ? '' : 'none';
+  }
+  const tokenLine = document.getElementById('relic-token-line');
+  if (tokenLine) tokenLine.textContent = '토큰 ' + getScales();
+  if (typeof renderRelicPanel === 'function') renderRelicPanel();
 }
 
 // 장신구: SVG 에셋을 캔버스(뱀 머리)에 렌더 + 꾸미기/뽑기 목록.
@@ -6630,9 +6971,9 @@ function revealGachaReward(reward) {
     addScales(reward.amount);
     setGachaStage({
       rarity: 'scales',
-      kicker: '비늘 보상',
-      title: reward.amount + '비늘 획득',
-      desc: '반짝이는 비늘이 지갑에 들어왔습니다.',
+      kicker: '토큰 보상',
+      title: reward.amount + '토큰 획득',
+      desc: '토큰이 들어왔습니다.',
       symbol: '◆'
     });
     gachaRolling = false;
@@ -6672,7 +7013,7 @@ function revealGachaReward(reward) {
     setGachaStage({
       rarity: 'scales',
       kicker: '중복 대체 보상',
-      title: refund + '비늘 획득',
+      title: refund + '토큰 획득',
       desc: item.name + '이(가) 대체 보상으로 바뀌었습니다.',
       symbol: '◆'
     });
@@ -6687,9 +7028,9 @@ function startGachaDraw() {
     playMenuDenySound();
     setGachaStage({
       rarity: 'idle',
-      kicker: '비늘 부족',
-      title: '75비늘이 필요합니다',
-      desc: '게임을 플레이해서 비늘을 더 모아주세요.',
+      kicker: '토큰 부족',
+      title: '75토큰이 필요합니다',
+      desc: '게임을 플레이해서 토큰을 더 모아주세요.',
       symbol: '!'
     });
     return;
@@ -6719,8 +7060,390 @@ if (gachaDrawButton) {
   });
 }
 
+// ============================================================
+// 보석. 조각 3개로 개방(Lv.1). 열린 보석은 전부 적용.
+// 강화는 토큰을 쓰고, 실패해도 파괴·하락 없음. 일반/하드/혼돈만.
+// ============================================================
+const RELIC_SAVE_KEY = 'snakombo_relics_v1';
+const RELIC_MAX_LEVEL = 5;
+const RELIC_DEFS = [
+  { id: 'echo', name: '사파이어', desc: '콤보 유지 시간이 늘어납니다.', color: '#93c5fd', rgb: [147, 197, 253], icon: 'assets/icons/gem-echo.png' },
+  { id: 'harvest', name: '토파즈', desc: '게임이 끝날 때 받는 토큰이 늘어납니다.', color: '#fbbf24', rgb: [251, 191, 36], icon: 'assets/icons/gem-harvest.png' },
+  { id: 'cling', name: '루비', desc: '점수를 얻을 때 확률로 같은 점수를 여러 번 받습니다.', color: '#f87171', rgb: [248, 113, 113], icon: 'assets/icons/gem-cling.png' },
+  { id: 'calm', name: '에메랄드', desc: '점수를 얻는 범위가 늘어납니다.', color: '#4ade80', rgb: [74, 222, 128], icon: 'assets/icons/gem-calm.png' },
+  { id: 'chase', name: '자수정', desc: '더 높은 점수부터 시작합니다.', color: '#c4b5fd', rgb: [196, 181, 253], icon: 'assets/icons/gem-chase.png' },
+  { id: 'magnet', name: '오팔', desc: '죽을때 확률적으로 부활합니다.', color: '#67e8f9', rgb: [103, 232, 249], icon: 'assets/icons/gem-magnet.png' }
+];
+const RELIC_STEPS = {
+  1: { cost: 25, fail: 0.30 },
+  2: { cost: 40, fail: 0.45 },
+  3: { cost: 60, fail: 0.60 },
+  4: { cost: 90, fail: 0.75 }
+};
+const RELIC_PITY_STEP = 0.02;
+let relicCache = null;
+let relicLastResult = '';
+
+function bindRelicIcons() {
+  for (let i = 0; i < RELIC_DEFS.length; i++) {
+    const img = new Image();
+    img.src = RELIC_DEFS[i].icon;
+    RELIC_DEFS[i]._img = img;
+  }
+}
+function relicDef(id) {
+  for (let i = 0; i < RELIC_DEFS.length; i++) {
+    if (RELIC_DEFS[i].id === id) return RELIC_DEFS[i];
+  }
+  return null;
+}
+function relicEffectsOn() {
+  return !tutorialMode && (gameMode === 'normal' || gameMode === 'hard' || gameMode === 'chaos');
+}
+function loadRelicState() {
+  const fragments = {};
+  const levels = {};
+  const pity = {};
+  let raw = null;
+  try { raw = JSON.parse(localStorage.getItem(RELIC_SAVE_KEY) || 'null'); } catch (_) { raw = null; }
+  const srcF = raw && raw.fragments ? raw.fragments : {};
+  const srcL = raw && raw.levels ? raw.levels : {};
+  const srcP = raw && raw.pity ? raw.pity : {};
+  for (let i = 0; i < RELIC_DEFS.length; i++) {
+    const id = RELIC_DEFS[i].id;
+    let lv = Math.floor(Number(srcL[id]) || 0);
+    if (lv < 0) lv = 0;
+    if (lv > RELIC_MAX_LEVEL) lv = RELIC_MAX_LEVEL;
+    levels[id] = lv;
+    let fr = Math.floor(Number(srcF[id]) || 0);
+    if (fr < 0) fr = 0;
+    if (fr > 2) fr = 2;
+    fragments[id] = lv >= 1 ? 0 : fr;
+    const rawP = srcP[id];
+    let pityLv = 0;
+    let pityN = 0;
+    if (rawP && typeof rawP === 'object') {
+      pityLv = Math.floor(Number(rawP.lv) || 0);
+      pityN = Math.floor(Number(rawP.n) || 0);
+    }
+    if (pityLv !== lv || pityN < 0) pityN = 0;
+    if (pityN > 50) pityN = 50;
+    if (lv >= RELIC_MAX_LEVEL) pityN = 0;
+    pity[id] = { lv: lv, n: pityN };
+  }
+  try {
+    if (!localStorage.getItem('snakombo_echo_unlearn_v1')) {
+      levels.echo = 0;
+      fragments.echo = 0;
+      pity.echo = 0;
+      localStorage.setItem('snakombo_echo_unlearn_v1', '1');
+      localStorage.setItem(RELIC_SAVE_KEY, JSON.stringify({ fragments, levels, pity }));
+    }
+  } catch (_) {}
+  return { fragments, levels, pity };
+}
+function relicPityFails(id, lv) {
+  const st = relicState();
+  const raw = st.pity && st.pity[id];
+  if (!raw || typeof raw !== 'object') return 0;
+  const at = Math.floor(Number(raw.lv) || 0);
+  const n = Math.floor(Number(raw.n) || 0);
+  if (at !== lv || n <= 0) return 0;
+  return n;
+}
+function relicSuccessChance(id, lv) {
+  const step = RELIC_STEPS[lv];
+  if (!step) return 0;
+  return Math.min(1, (1 - step.fail) + relicPityFails(id, lv) * RELIC_PITY_STEP);
+}
+function relicState() {
+  if (!relicCache) relicCache = loadRelicState();
+  return relicCache;
+}
+function saveRelicState(st) {
+  relicCache = st;
+  try { localStorage.setItem(RELIC_SAVE_KEY, JSON.stringify(st)); } catch (_) {}
+  renderRelicPanel();
+}
+function relicLevel(id) {
+  const st = relicState();
+  return (st.levels && st.levels[id]) || 0;
+}
+const ECHO_MS = [0, 100, 200, 300, 400, 500];
+function relicEchoMs() {
+  if (!relicEffectsOn()) return 0;
+  return ECHO_MS[relicLevel('echo')] || 0;
+}
+const CLING_CHANCE = [0, 0.08, 0.1, 0.12, 0.14, 0.16];
+const OPAL_CHANCE = [0, 0.04, 0.055, 0.07, 0.085, 0.1];
+function rollRubyScore(pts) {
+  if (!relicEffectsOn()) return { pts: pts, base: pts, mult: 1 };
+  const lv = relicLevel('cling');
+  const chance = CLING_CHANCE[lv] || 0;
+  if (!(chance > 0) || Math.random() >= chance) return { pts: pts, base: pts, mult: 1 };
+  const mult = lv >= 4 ? 3 : 2;
+  return { pts: roundScore(pts * mult), base: pts, mult: mult };
+}
+function relicScoreRangeMult() {
+  if (!relicEffectsOn()) return 1;
+  const lv = relicLevel('calm');
+  return lv > 0 ? 1 + lv * 0.03 : 1;
+}
+function applyChaseStartScore() {
+  if (!relicEffectsOn() || localPlayEnabled || isOnlineMode()) return 0;
+  const pts = relicLevel('chase') * 5;
+  if (pts > 0) score = pts;
+  return pts;
+}
+function calcTokenGain(finalScore, playMs) {
+  if (!(playMs >= 10000)) return 0;
+  if (tutorialMode || gameMode === 'practice' || gameMode === 'roguelike' || gameMode === 'multi') return 0;
+  const scaleMult = (gameMode === 'hard' || gameMode === 'chaos') ? 1.5 : 1;
+  let tokenGain = Math.floor((finalScore / 5) * scaleMult);
+  if (relicEffectsOn()) tokenGain = Math.floor(tokenGain * (1 + relicLevel('harvest') * 0.10));
+  return tokenGain > 0 ? tokenGain : 0;
+}
+function tryOpalRevive() {
+  if (!relicEffectsOn() || localPlayEnabled || isOnlineMode()) return false;
+  const now = performance.now();
+  if (now < opalInvulnUntil) return true;
+  const lv = relicLevel('magnet');
+  if (lv < 1) return false;
+  if (Math.random() >= (OPAL_CHANCE[lv] || 0)) return false;
+  const shield = lv >= 5 ? 2000 : lv >= 4 ? 1000 : 0;
+  opalInvulnUntil = shield > 0 ? now + shield : 0;
+  rogueHitFlashUntil = now + 220;
+  if (points[0]) {
+    floatingTexts.push({
+      x: points[0].x,
+      y: points[0].y - 24,
+      text: '부활',
+      life: FLOAT_TEXT_LIFE,
+      color: [103, 232, 249]
+    });
+  }
+  try { playMenuUiSound('primary'); } catch (_) {}
+  return true;
+}
+function opalWallWrap() {
+  const head = points[0];
+  if (!head) return;
+  let dx = 0;
+  let dy = 0;
+  if (head.x < 0) dx = canvas.width;
+  else if (head.x > canvas.width) dx = -canvas.width;
+  if (head.y < 0) dy = canvas.height;
+  else if (head.y > canvas.height) dy = -canvas.height;
+  if (!dx && !dy) return;
+  for (let i = 0; i < points.length; i++) {
+    points[i].x += dx;
+    points[i].y += dy;
+  }
+}
+function opalClearObstacle(obs) {
+  if (!obs || !points[0]) return;
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  const hits = (hx, hy) => {
+    for (let i = 0; i < obs.circles.length; i++) {
+      const circ = obs.circles[i];
+      if (checkCollision(hx, hy, obs.x + circ.ox, obs.y + circ.oy, circ.r)) return true;
+    }
+    return false;
+  };
+  for (let d = 8; d <= 280; d += 8) {
+    const hx = points[0].x - c * d;
+    const hy = points[0].y - s * d;
+    if (hx < 4 || hy < 4 || hx > canvas.width - 4 || hy > canvas.height - 4) continue;
+    if (hits(hx, hy)) continue;
+    const dx = hx - points[0].x;
+    const dy = hy - points[0].y;
+    for (let i = 0; i < points.length; i++) {
+      points[i].x += dx;
+      points[i].y += dy;
+    }
+    return;
+  }
+  if (!obs.fadeOut) obs.fadeOut = OBS_FADE_FRAMES;
+}
+function rollRelicFragmentId() {
+  if (!relicEffectsOn()) return null;
+  for (let i = 0; i < staticObs.length; i++) {
+    const o = staticObs[i];
+    if (o && o.relicId && !o.fadeOut) return null;
+  }
+  const open = [];
+  for (let i = 0; i < RELIC_DEFS.length; i++) {
+    if (relicLevel(RELIC_DEFS[i].id) < 1) open.push(RELIC_DEFS[i].id);
+  }
+  if (!open.length) return null;
+  const chance = 0.04;
+  if (Math.random() > chance) return null;
+  return open[(Math.random() * open.length) | 0];
+}
+function spawnGemShard(x, y, def) {
+  const img = def && def._img;
+  if (!img || !img.complete || !img.naturalWidth) return;
+  const shard = {
+    x: x,
+    y: y,
+    vx: (Math.random() - 0.5) * 1.6,
+    vy: 0.35 + Math.random() * 0.45,
+    rot: (Math.random() - 0.5) * 0.5,
+    vr: (Math.random() - 0.5) * 0.05,
+    slice: (Math.random() * 3) | 0,
+    img: img,
+    life: 1000
+  };
+  gemShards.push(shard);
+  return shard;
+}
+function grantRelicFragment(obs) {
+  if (!obs || !obs.relicId || obs._relicGiven) return '';
+  obs._relicGiven = true;
+  const def = relicDef(obs.relicId);
+  if (!def) return '';
+  const st = relicState();
+  if ((st.levels[def.id] || 0) >= 1) return '';
+  const next = (st.fragments[def.id] || 0) + 1;
+  if (next >= 3) {
+    st.fragments[def.id] = 0;
+    st.levels[def.id] = 1;
+    relicLastResult = def.name + ' 보석이 열렸습니다.';
+    saveRelicState(st);
+    showRelicUnlockToast(def);
+    return def.name + ' 조각 획득';
+  }
+  st.fragments[def.id] = next;
+  saveRelicState(st);
+  return def.name + ' 조각 획득';
+}
+function enhanceRelic(id) {
+  const def = relicDef(id);
+  if (!def) return;
+  const st = relicState();
+  const lv = st.levels[id] || 0;
+  const step = RELIC_STEPS[lv];
+  if (!step) {
+    relicLastResult = lv >= RELIC_MAX_LEVEL ? '더 이상 강화할 수 없습니다.' : '';
+    renderRelicPanel();
+    return;
+  }
+  if (getScales() < step.cost) {
+    relicLastResult = '토큰이 부족합니다.';
+    renderRelicPanel();
+    return;
+  }
+  setScales(getScales() - step.cost);
+  if (!st.pity) st.pity = {};
+  const chance = relicSuccessChance(id, lv);
+  if (Math.random() >= chance) {
+    st.pity[id] = { lv: lv, n: relicPityFails(id, lv) + 1 };
+    relicLastResult = def.name + ' 강화에 실패했습니다. 레벨은 그대로입니다.';
+    saveRelicState(st);
+    return;
+  }
+  st.levels[id] = lv + 1;
+  st.fragments[id] = 0;
+  st.pity[id] = { lv: lv + 1, n: 0 };
+  relicLastResult = def.name + ' Lv.' + (lv + 1);
+  saveRelicState(st);
+}
+function relicNum(n) {
+  const s = (Math.round(n * 100) / 100).toFixed(2);
+  return s.replace(/(\.\d)0$/, '$1').replace(/\.00$/, '');
+}
+function relicStatAt(id, lv) {
+  if (id === 'echo') return '콤보 +' + [0, 0.1, 0.2, 0.3, 0.4, 0.5][lv] + '초';
+  if (id === 'harvest') return '토큰 +' + (lv * 10) + '%';
+  if (id === 'cling') return ['', '8% · 2번', '10% · 2번', '12% · 2번', '14% · 3번', '16% · 3번'][lv];
+  if (id === 'calm') return '범위 +' + (lv * 3) + '%';
+  if (id === 'chase') return '시작 ' + (lv * 5) + '점';
+  if (id === 'magnet') {
+    const line = '부활 ' + [0, 4, 5.5, 7, 8.5, 10][lv] + '%';
+    if (lv >= 5) return line + ' · 무적 2초';
+    if (lv >= 4) return line + ' · 무적 1초';
+    return line;
+  }
+  return '';
+}
+function lightGemTint(hex) {
+  const n = parseInt(String(hex).replace('#', ''), 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  const t = 0.5;
+  return 'rgb(' +
+    Math.round(255 * (1 - t) + r * t) + ',' +
+    Math.round(255 * (1 - t) + g * t) + ',' +
+    Math.round(255 * (1 - t) + b * t) + ')';
+}
+function renderRelicPanel() {
+  const list = document.getElementById('relic-list');
+  const tokenLine = document.getElementById('relic-token-line');
+  const result = document.getElementById('relic-result');
+  if (tokenLine) tokenLine.textContent = '토큰 ' + getScales();
+  if (result) result.textContent = relicLastResult;
+  if (!list) return;
+  const st = relicState();
+  const tokens = getScales();
+  let html = '';
+  for (let i = 0; i < RELIC_DEFS.length; i++) {
+    const r = RELIC_DEFS[i];
+    const lv = st.levels[r.id] || 0;
+    const fr = st.fragments[r.id] || 0;
+    let meta = '조각 ' + fr + '/3';
+    let btn = '';
+    if (lv >= 1) {
+      meta = 'Lv.' + lv + ' / ' + RELIC_MAX_LEVEL;
+      const step = RELIC_STEPS[lv];
+      if (step) {
+        const pity = relicPityFails(r.id, lv);
+        const pct = Math.round(relicSuccessChance(r.id, lv) * 100);
+        const pctText = pity > 0 ? '<span class="relic-pity">' + pct + '%</span>' : pct + '%';
+        const lack = tokens < step.cost;
+        btn = '<button type="button" class="relic-enhance" data-relic-enhance="' + r.id + '"' +
+          (lack ? ' disabled' : '') + '>강화 ' + step.cost + ' · 성공 ' + pctText + '</button>';
+      } else {
+        btn = '<span class="relic-max">최대</span>';
+      }
+    }
+    let levels = '';
+    for (let n = 1; n <= RELIC_MAX_LEVEL; n++) {
+      levels += '<div class="relic-lv' + (n === lv ? ' is-now' : '') + '"><span>Lv.' + n + '</span><span>' +
+        relicStatAt(r.id, n) + '</span></div>';
+    }
+    const lock = lv >= 1 ? '' :
+      '<div class="relic-lock"><span class="relic-lock-msg">조각 3개를 모아 해제하세요</span>' +
+      '<span class="relic-lock-count">' + fr + '/3</span></div>';
+    html += '<article class="relic-card' + (lv >= 1 ? '' : ' is-locked') + '">' +
+      '<div class="relic-card-body">' +
+      '<div class="relic-card-top"><img class="relic-icon" src="' + r.icon + '" alt="">' +
+      '<div><div class="relic-name">' + r.name + '</div>' +
+      '<p class="relic-desc">' + r.desc + '</p></div></div>' +
+      '<div class="relic-levels">' + levels + '</div>' +
+      '<div class="relic-meta"><span>' + meta + '</span>' + btn + '</div></div>' + lock + '</article>';
+  }
+  list.innerHTML = html;
+}
+function bindRelicPanel() {
+  const list = document.getElementById('relic-list');
+  if (!list || list.dataset.bound) return;
+  list.dataset.bound = '1';
+  list.addEventListener('click', e => {
+    const btn = e.target.closest('[data-relic-enhance]');
+    if (!btn || btn.disabled) return;
+    e.stopPropagation();
+    enhanceRelic(btn.getAttribute('data-relic-enhance'));
+  });
+}
+
+
 preloadAccessories();
 updateScalesUI();
+bindRelicPanel();
+renderRelicPanel();
+bindRelicIcons();
 if (FEATURES.customize) renderCustomizeList();
 saveOwnedAccessories();
 updateGachaUI();
@@ -6873,6 +7596,7 @@ function returnToMainMenu() {
   menuScreen.classList.remove('hidden');
   syncMenuTitleColorFromGameMode();
   updateMenuHighScoreDisplay();
+  playTokenFly();
   updatePracticePanelVisibility();
   applyMobileMenuScale();
   updatePortraitPrompt();
@@ -6969,6 +7693,7 @@ function maybeShowMainIntro() {
 
 function startGame() {
   if (gameRunning) return;
+  settleTokenFly();
   setHubView(null);
   setMenuInfoOpen(false);
   tutorialMode = false;

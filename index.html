@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Snakombo</title>
 <link rel="icon" href="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/flame.svg" type="image/svg+xml">
-<link rel="stylesheet" href="main.css?v=20260518-max14">
+<link rel="stylesheet" href="main.css?v=20261018-pityfix">
 <script>
   // 로딩 화면은 "처음 진입"에만 표시 (새로고침 플래시 방지용: 첫 페인트 전에 결정)
   (function () {
@@ -79,23 +79,13 @@
               <div class="mt-1 flex flex-wrap items-center gap-1.5" role="tablist" aria-label="상세정보 보기 전환">
                 <button
                   type="button"
-                  id="menu-info-tab-score"
+                  id="menu-info-tab-info"
                   class="menu-info-tab is-active"
                   role="tab"
                   aria-selected="true"
-                  aria-controls="menu-info-score"
+                  aria-controls="menu-info-info"
                 >
-                  점수 체계
-                </button>
-                <button
-                  type="button"
-                  id="menu-info-tab-modes"
-                  class="menu-info-tab"
-                  role="tab"
-                  aria-selected="false"
-                  aria-controls="menu-info-modes"
-                >
-                  모드 정보
+                  정보
                 </button>
                 <button
                   type="button"
@@ -120,223 +110,289 @@
           </div>
         </div>
         <div class="menu-info-scroll min-h-0 flex-1 space-y-0 overflow-y-auto overflow-x-hidden bg-zinc-700/50 px-4 py-3">
-          <div id="menu-info-score" class="menu-info-pane is-active" role="tabpanel" tabindex="0" aria-label="점수 체계">
-            <ul class="list-inside list-disc space-y-2.5 text-left text-[13px] leading-snug text-zinc-400 sm:space-y-3 sm:text-[14px] sm:leading-relaxed">
-            <li>
-              장애물 가장자리와의 <strong class="text-zinc-200">거리</strong>가 가까울수록 한 번에 얻는
-              <strong class="text-zinc-200">기본점</strong>이 커집니다. 멀리 스쳐 지나가면 낮고, 아슬아슬하게 붙을수록 높아집니다
-              (대략 <strong class="text-zinc-200">0.5 → 1 → 2 → 4점</strong> 구간).
-            </li>
-            <li>
-              플레이 <strong class="text-zinc-200">시간</strong>이 길어질수록
-              <strong class="text-zinc-200">시간 보너스</strong>가 쌓입니다. 이 보너스는
-              <strong class="text-zinc-200">장애물을 근접해서 지나가며 점수를 받을 때</strong>,
-              즉 근접 구역을 벗어나는 순간 <strong class="text-zinc-200">기본점에 추가로</strong> 더해집니다.
-              쌓이는 속도는 구역마다 달라서, <strong class="text-zinc-200">가장 먼 구간</strong>은 <strong class="text-zinc-200">30초마다 0.5점</strong>,
-              <strong class="text-zinc-200">다른 모든 구역</strong>은 <strong class="text-zinc-200">15초마다 0.5점</strong>씩 붙습니다.
-            </li>
-            <li>
-              근접 상태를 <strong class="text-zinc-200">잠깐(약 0.15초 이상)</strong> 유지한 다음 그 장애물의
-              <strong class="text-zinc-200">근접 구역을 벗어날 때</strong>, 위에서 계산한 기본점과 시간 보너스가 한꺼번에 들어옵니다.
-            </li>
-            <li>
-              점수를 받은 뒤 <strong class="text-zinc-200">2초 안에</strong> 또 점수를 받으면
-              <strong class="text-zinc-200">콤보</strong>가 1씩 오릅니다. 콤보가 2 이상이면
-              그때 받는 점수에 <strong class="text-zinc-200">(콤보 − 1) × 0.5점</strong>이
-              <strong class="text-zinc-200">추가</strong>로 붙습니다. 마지막 득점 후 2초가 지나면 콤보는 끊깁니다.
-            </li>
-            <li>
-              필드에 나오는 <strong class="text-zinc-200">일반·이동 장애물 합계</strong>는 최대
-              <strong class="text-zinc-200">14개</strong>까지입니다.
-            </li>
-            <li>
-              <strong class="text-zinc-200">이동 장애물</strong>도 일반 장애물과 똑같은 방식으로
-              <strong class="text-zinc-200">근접 통과 점수</strong>를 줍니다. 어두운 회색으로 표시되고
-              <strong class="text-zinc-200">고정 경로</strong>를 왕복하며,
-              <strong class="text-zinc-200">35점</strong> 이상부터 등장합니다.
-            </li>
-            </ul>
-          </div>
-          <div id="menu-info-modes" class="menu-info-pane" role="tabpanel" tabindex="0" aria-label="모드 정보" aria-hidden="true">
-            <ul class="list-inside list-disc space-y-2.5 text-left text-[13px] leading-snug text-zinc-400 sm:space-y-3 sm:text-[14px] sm:leading-relaxed">
-              <li>
-                <strong class="text-white">일반</strong>: 기본 규칙으로 플레이합니다.<br>
-                <strong class="text-white">이동 장애물</strong> 등장 확률: 시도 시 기본 <strong class="text-white">15%</strong>(<strong class="text-white">5점마다 +1%p</strong>).
-              </li>
-              <li>
-                <strong class="text-[#f87171]">하드</strong>: <strong class="text-white">이동</strong>/<strong class="text-white">회전</strong>/<strong class="text-white">장애물 생성</strong>이 일반 대비 <strong class="text-white">+35%</strong> 빠르고, <strong class="text-white">장애물 간격</strong>이 더 촘촘합니다(일반 <strong class="text-white">5머리</strong> → 하드 <strong class="text-white">3.5머리</strong>).<br>
-                <strong class="text-white">이동 장애물</strong> 등장 확률: 시도 시 기본 <strong class="text-white">25%</strong>(<strong class="text-white">5점마다 +1%p</strong>).<br>
-                <strong class="text-white">해금</strong>: 일반 최고기록 <strong class="text-white">40점</strong> 이상.
-              </li>
-              <li>
-                <strong class="text-[#a78bfa]">혼돈</strong>: <strong class="text-white">이동</strong>/<strong class="text-white">회전</strong>/<strong class="text-white">장애물 생성</strong>이 일반 대비 <strong class="text-white">+20%</strong> 빠릅니다. 시작 시 <strong class="text-white">랜덤 디버프 3개</strong>가 적용됩니다.<br>
-                <strong class="text-white">이동 장애물</strong> 등장 확률: <strong class="text-white">일반과 동일</strong>(시도 시 기본 <strong class="text-white">15%</strong>, <strong class="text-white">5점마다 +1%p</strong>).<br>
-                <strong class="text-white">해금</strong>: 하드 최고기록 <strong class="text-white">30점</strong> 이상.
-                <details class="mt-2 rounded-xl border border-white/10 px-3 py-2">
-                  <summary class="cursor-pointer select-none text-[12px] font-extrabold text-zinc-200">디버프 목록</summary>
-                  <ul class="mt-2 list-inside list-disc space-y-1.5 text-[12px] leading-snug text-zinc-400">
-                    <li><strong class="text-zinc-200">장애물 간격 감소</strong>: 장애물 간격이 더 촘촘해집니다.</li>
-                    <li><strong class="text-zinc-200">뱀 길이 1.5배</strong>: 시작 뱀 길이가 더 깁니다.</li>
-                    <li><strong class="text-zinc-200">장애물 글리치</strong>: 일부 장애물이 가끔씩 흔들립니다.</li>
-                    <li><strong class="text-zinc-200">이동속도 유동</strong>: 이동 속도가 계속 변합니다.</li>
-                    <li><strong class="text-zinc-200">회전 관성 증가</strong>: 방향 전환이 더 둔하게 느껴집니다.</li>
-                    <li><strong class="text-zinc-200">콤보 유지시간 감소</strong>: 콤보 유지 시간이 짧아집니다.</li>
-                    <li><strong class="text-zinc-200">충돌 판정 강화</strong>: 충돌 판정이 더 엄격해집니다.</li>
-                    <li><strong class="text-zinc-200">기본점수 구간 축소</strong>: 근접 점수의 낮은 구간이 불리해집니다.</li>
-                    <li><strong class="text-zinc-200">안전구역 축소</strong>: 뱀 주변 “장애물 생성 금지” 구역이 줄어듭니다.</li>
-                    <li><strong class="text-zinc-200">이동 장애물 강화</strong>: 이동 장애물이 더 일찍/자주 등장합니다.</li>
-                    <li><strong class="text-zinc-200">시야 축소</strong>: 뱀 주변 원형 구역만 보이고, 바깥은 완전히 보이지 않습니다.</li>
-                  </ul>
-                </details>
-              </li>
-              <li>
-                <strong class="text-[#fbbf24]">로그라이크</strong>: 화면 아래 <strong class="text-white">게이지</strong>가 계속 줄어들고, 점수(근접 통과)를 얻으면 <strong class="text-white">게이지가 회복</strong>됩니다. 게이지가 0이 되면 게임 오버입니다.<br>
-                게임 시작 시 한 번, 그다음부터는 <strong class="text-white">15초마다</strong> 증강 3개 중 1개를 고릅니다. 이미 가진 증강을 다시 고르면 <strong class="text-white">레벨이 올라가</strong> 더 강해집니다.
-                <br><strong class="text-white">해금</strong>: 하드 최고기록 <strong class="text-white">30점</strong> 이상.
-                <details class="mt-2 rounded-xl border border-white/10 px-3 py-2">
-                  <summary class="cursor-pointer select-none text-[12px] font-extrabold text-zinc-200">증강 목록</summary>
-                  <div class="mt-2 space-y-3 text-[12px] leading-snug text-zinc-400">
-                    <div>
-                      <div class="font-extrabold text-zinc-200">활력</div>
-                      <div>Lv.1: 최대·현재 게이지 +12</div>
-                      <div>Lv.2: 최대·현재 게이지 +18</div>
-                      <div>Lv.3: 최대·현재 게이지 +25, 게이지 감소 15% 완화</div>
+          <div id="menu-info-info" class="menu-info-pane is-active" role="tabpanel" tabindex="0" aria-label="정보">
+            <div class="info-stack" data-acc="info">
+              <section class="info-box">
+                <button type="button" class="info-box-head" aria-expanded="false">
+                  <span>점수</span>
+                  <span class="info-box-chev" aria-hidden="true"></span>
+                </button>
+                <div class="info-box-body">
+                  <div class="info-box-body-inner info-copy">
+                    <div class="info-ch">
+                      <div class="info-ch-title">기본 점수</div>
+                      <p>장애물에 가까이 붙을수록 점수가 높아집니다.</p>
+                      <p>멀리 스치면 0.5점, 아슬아슬하게 붙으면 4점까지 나옵니다.</p>
+                      <p>점수는 장애물 옆을 빠져나올 때 얻습니다.</p>
                     </div>
-                    <div>
-                      <div class="font-extrabold text-zinc-200">성장</div>
-                      <div>Lv.1: 장애물 통과 시 25% 확률로 최대 게이지 +1,<br>추가 점수 +1</div>
-                      <div>Lv.2: 장애물 통과 시 35% 확률로 최대 게이지 +1,<br>추가 점수 +1.5</div>
-                      <div>Lv.3: 장애물 통과 시 55% 확률로 최대 게이지 +1,<br>추가 점수 +2</div>
+                    <div class="info-ch">
+                      <div class="info-ch-title">시간 보너스</div>
+                      <p>오래 플레이할수록 보너스 점수가 쌓입니다.</p>
+                      <p>멀리 스치면 30초마다 0.5점씩 더 붙습니다.</p>
+                      <p>가까이 붙으면 15초마다 0.5점씩 더 붙습니다.</p>
                     </div>
-                    <div>
-                      <div class="font-extrabold text-zinc-200">예리</div>
-                      <div>Lv.1: 통과 기본 점수 +0.6</div>
-                      <div>Lv.2: 통과 기본 점수 +1.2</div>
-                      <div>Lv.3: 통과 기본 점수 +2.4</div>
+                    <div class="info-ch">
+                      <div class="info-ch-title">콤보</div>
+                      <p>점수를 얻은 뒤 1.5초 안에 다시 점수를 얻으면 콤보가 쌓입니다.</p>
+                      <p>콤보가 쌓일 때마다 점수가 0.5점씩 더 오릅니다.</p>
+                      <p>장애물 옆에 붙어 있는 동안에는 콤보가 유지됩니다.</p>
+                      <p>장애물에서 벗어난 뒤 1.5초 동안 점수를 못 얻으면 콤보가 끊깁니다.</p>
                     </div>
-                    <div>
-                      <div class="font-extrabold text-zinc-200">노다지</div>
-                      <div>Lv.1: 15% 확률로 점수 ×2 장애물 소환</div>
-                      <div>Lv.2: 소환 확률 +8%, 점수 배율 ×2.5</div>
-                      <div>Lv.3: 소환 확률 +12%, 점수 배율 ×3.5</div>
-                    </div>
-                    <div>
-                      <div class="font-extrabold text-zinc-200">표식</div>
-                      <div>Lv.1: 5초마다 장애물 2개에 표식(최대 3스택), 표식당 +1.5점</div>
-                      <div>Lv.2: 4초마다 장애물 3개에 표식(최대 3스택), 표식당 +1.5점</div>
-                      <div>Lv.3: 4초마다 장애물 4개에 표식(최대 3스택), 표식당 +1.5점, 소모 시 35% 확률로 주변 장애물로 전이</div>
-                    </div>
-                    <div>
-                      <div class="font-extrabold text-zinc-200">질주</div>
-                      <div>Lv.1: 이동 속도 +10%, 장애물 소환 +12%</div>
-                      <div>Lv.2: 이동 속도 +8%, 장애물 소환 +8%</div>
-                      <div>Lv.3: 이동 속도 +14%, 피격 데미지 40% 감소</div>
-                    </div>
-                    <div>
-                      <div class="font-extrabold text-zinc-200">보호막</div>
-                      <div>Lv.1: 선택마다 보호막 2회</div>
-                      <div>Lv.2: 선택마다 보호막 3회</div>
-                      <div>Lv.3: 선택마다 보호막 4회, 소모 시 최대 게이지 5% 회복</div>
-                    </div>
-                    <div>
-                      <div class="font-extrabold text-zinc-200">연계</div>
-                      <div>Lv.1: 콤보 유지시간 +0.75초, 최대 콤보 +1</div>
-                      <div>Lv.2: 최대 콤보 +2</div>
-                      <div>Lv.3: 콤보 유지시간 +0.5초, 콤보당 이동속도 +3%</div>
-                    </div>
-                    <div>
-                      <div class="font-extrabold text-zinc-200">폭파</div>
-                      <div>Lv.1: 피격 시 주변 장애물 소거, 장애물 소환 +25%</div>
-                      <div>Lv.2: 폭파 범위 확대, 장애물 소환 +10%</div>
-                      <div>Lv.3: 폭파 범위 매우 확대, 장애물 소환 +20%</div>
-                    </div>
-                    <div>
-                      <div class="font-extrabold text-zinc-200">도박</div>
-                      <div>Lv.1: 득점 배율 0.7~1.5배</div>
-                      <div>Lv.2: 득점 배율 0.8~1.7배</div>
-                      <div>Lv.3: 득점 배율 1~2배</div>
-                    </div>
-                    <div>
-                      <div class="font-extrabold text-zinc-200">분노</div>
-                      <div>Lv.1: 게이지 25% 이하일 때 모든 점수 1.2배, 피격 피해 15% 감소</div>
-                      <div>Lv.2: 게이지 30% 이하일 때 모든 점수 1.3배, 피격 피해 20% 감소</div>
-                      <div>Lv.3: 게이지 40% 이하일 때 모든 점수 1.5배, 피격 피해 35% 감소</div>
-                    </div>
-                    <div>
-                      <div class="font-extrabold text-zinc-200">역습</div>
-                      <div>Lv.1: 피격 후 1초간 모든 점수 1.3배</div>
-                      <div>Lv.2: 피격 후 1초간 모든 점수 1.7배</div>
-                      <div>Lv.3: 피격 후 1.5초간 모든 점수 2배</div>
-                    </div>
-                    <div>
-                      <div class="font-extrabold text-zinc-200">미래</div>
-                      <div>Lv.1: 등장 증강이 각각 25% 확률로 수치 강화</div>
-                      <div>Lv.2: 증강 선택 시 최대 게이지의 25% 회복</div>
-                    </div>
-                    <div>
-                      <div class="font-extrabold text-zinc-200">저격</div>
-                      <div>Lv.1: 가장 먼 0.5점 구간 무득점, 장애물을 지날 때 점수 ×1.3</div>
-                      <div>Lv.2: 1점 구간까지 무득점, 장애물을 지날 때 점수 ×1.5</div>
-                      <div>Lv.3: 장애물을 지날 때 점수 ×1.8, 통과 시 35% 확률로 콤보 +2</div>
+                    <div class="info-ch">
+                      <div class="info-ch-title">장애물</div>
+                      <p>한 번에 나오는 장애물은 최대 14개입니다.</p>
+                      <p>35점이 되면 이동 장애물도 나옵니다. 점수는 똑같이 줍니다.</p>
                     </div>
                   </div>
-                </details>
-              </li>
-              <li>
-                <strong class="text-[#60a5fa]">멀티플레이</strong>: <strong class="text-white">로컬 2인</strong>(한 PC) 모드입니다. 화이트(A/D), 그레이(←/→)로 조작하며 <strong class="text-white">서로 충돌하지 않습니다</strong>. 점수·장애물 규칙은 <strong class="text-white">일반과 같습니다</strong>.<br>
-                <strong class="text-white">승리</strong>: 상대가 먼저 죽거나, 먼저 <strong class="text-white">50점</strong> 달성.<br>
-                <strong class="text-white">온라인</strong>: <strong class="text-white">업데이트 예정</strong>.
-              </li>
-              <li>
-                <strong class="text-[#4ade80]">연습</strong>: 설정 패널에서 <strong class="text-white">속도</strong>/<strong class="text-white">회전</strong>/<strong class="text-white">장애물 생성</strong>/<strong class="text-white">콤보 유지</strong>/<strong class="text-white">무적</strong> 등을 직접 조절할 수 있습니다. 시간이 지나도 <strong class="text-white">속도·점수 보너스 증가는 없습니다</strong>. <strong class="text-white">업적/기록</strong>에도 반영되지 않습니다.
-              </li>
-            </ul>
+                </div>
+              </section>
+              <section class="info-box">
+                <button type="button" class="info-box-head" aria-expanded="false">
+                  <span>모드</span>
+                  <span class="info-box-chev" aria-hidden="true"></span>
+                </button>
+                <div class="info-box-body">
+                  <div class="info-box-body-inner info-copy">
+                    <div class="info-ch info-ch--mode info-ch--normal">
+                      <div class="info-ch-title">일반</div>
+                      <p>추가 규칙 없이 플레이합니다.</p>
+                      <p>이동 장애물이 나올 확률은 15%입니다.</p>
+                      <p>점수가 5점 오를 때마다 그 확률이 1% 올라갑니다.</p>
+                    </div>
+                    <div class="info-ch info-ch--mode info-ch--hard">
+                      <div class="info-ch-title">하드</div>
+                      <p>이동, 회전, 장애물 생성이 일반보다 35% 빠릅니다.</p>
+                      <p>장애물 사이 간격이 더 좁습니다.</p>
+                      <p>이동 장애물은 25% 확률로 나옵니다.</p>
+                      <p>일반에서 40점을 넘기면 열립니다.</p>
+                    </div>
+                    <div class="info-ch info-ch--mode info-ch--chaos">
+                      <div class="info-ch-title">혼돈</div>
+                      <p>이동 속도가 일반보다 20% 빠릅니다.</p>
+                      <p>게임이 시작될 때 디버프 3개가 붙습니다.</p>
+                      <p>하드에서 30점을 넘기면 열립니다.</p>
+                    <div class="info-stack" data-acc="chaos">
+                      <section class="info-box info-box--sub info-box--chaos">
+                        <button type="button" class="info-box-head" aria-expanded="false">
+                          <span>디버프 목록</span>
+                          <span class="info-box-chev" aria-hidden="true"></span>
+                        </button>
+                        <div class="info-box-body">
+                          <div class="info-box-body-inner info-copy">
+                            <ul>
+                              <li><strong>장애물 간격 감소</strong> 장애물 사이가 더 좁아집니다.</li>
+                              <li><strong>장애물 글리치</strong> 일부 장애물이 가끔 흔들립니다.</li>
+                              <li><strong>이동속도 유동</strong> 이동 속도가 계속 변합니다.</li>
+                              <li><strong>회전 관성 증가</strong> 방향 전환이 더 둔해집니다.</li>
+                              <li><strong>콤보 유지시간 감소</strong> 콤보가 더 빨리 끊깁니다.</li>
+                              <li><strong>충돌 판정 강화</strong> 장애물에 더 잘 부딪힙니다.</li>
+                              <li><strong>기본점수 구간 축소</strong> 멀리 스칠 때의 0.5점이 사라지고 1점이 됩니다.</li>
+                              <li><strong>안전구역 축소</strong> 뱀 주변에 장애물이 더 잘 생깁니다.</li>
+                              <li><strong>이동 장애물 강화</strong> 이동 장애물이 더 일찍, 더 자주 나옵니다.</li>
+                              <li><strong>시야 축소</strong> 뱀 주변만 보이고 바깥은 보이지 않습니다.</li>
+                            </ul>
+                          </div>
+                        </div>
+                      </section>
+                    </div>
+                    </div>
+                    <div class="info-ch info-ch--mode info-ch--rogue">
+                      <div class="info-ch-title">로그라이크</div>
+                      <p>화면 아래 게이지가 계속 줄어듭니다.</p>
+                      <p>점수를 얻으면 게이지가 다시 찹니다.</p>
+                      <p>게이지가 0이 되면 게임이 끝납니다.</p>
+                      <p>시작할 때 한 번, 이후에는 15초마다 증강 3개 중 하나를 고릅니다.</p>
+                      <p>이미 가진 증강을 다시 고르면 더 강해집니다.</p>
+                      <p>하드에서 30점을 넘기면 열립니다.</p>
+                    <div class="info-stack" data-acc="rogue">
+                      <section class="info-box info-box--sub info-box--rogue">
+                        <button type="button" class="info-box-head" aria-expanded="false">
+                          <span>증강 목록</span>
+                          <span class="info-box-chev" aria-hidden="true"></span>
+                        </button>
+                        <div class="info-box-body">
+                          <div class="info-box-body-inner info-copy">
+                            <div class="info-aug"><div class="info-aug-name">활력</div><div>Lv.1 최대·현재 게이지 +12</div><div>Lv.2 최대·현재 게이지 +18</div><div>Lv.3 최대·현재 게이지 +25, 게이지 감소 15% 완화</div></div>
+                            <div class="info-aug"><div class="info-aug-name">성장</div><div>Lv.1 통과 시 25% 확률로 최대 게이지 +1, 추가 점수 +1</div><div>Lv.2 35% 확률로 최대 게이지 +1, 추가 점수 +1.5</div><div>Lv.3 55% 확률로 최대 게이지 +1, 추가 점수 +2</div></div>
+                            <div class="info-aug"><div class="info-aug-name">예리</div><div>Lv.1 통과 기본 점수 +0.6</div><div>Lv.2 +1.2</div><div>Lv.3 +2.4</div></div>
+                            <div class="info-aug"><div class="info-aug-name">노다지</div><div>Lv.1 15% 확률로 점수 2배 장애물</div><div>Lv.2 확률 +8%, 배율 2.5배</div><div>Lv.3 확률 +12%, 배율 3.5배</div></div>
+                            <div class="info-aug"><div class="info-aug-name">표식</div><div>Lv.1 5초마다 장애물 2개에 표식(최대 3겹), 표식당 +1.5점</div><div>Lv.2 4초마다 3개, 표식당 +1.5점</div><div>Lv.3 4초마다 4개, 표식당 +1.5점. 사라질 때 35% 확률로 주변으로 퍼짐</div></div>
+                            <div class="info-aug"><div class="info-aug-name">질주</div><div>Lv.1 이동 속도 +10%, 장애물 소환 +12%</div><div>Lv.2 이동 속도 +8%, 소환 +8%</div><div>Lv.3 이동 속도 +14%, 피격 피해 40% 감소</div></div>
+                            <div class="info-aug"><div class="info-aug-name">보호막</div><div>Lv.1 고를 때마다 보호막 2회</div><div>Lv.2 3회</div><div>Lv.3 4회, 소모 시 최대 게이지 5% 회복</div></div>
+                            <div class="info-aug"><div class="info-aug-name">연계</div><div>Lv.1 콤보 유지 +0.75초, 최대 콤보 +1</div><div>Lv.2 최대 콤보 +2</div><div>Lv.3 콤보 유지 +0.5초, 콤보당 이동 속도 +3%</div></div>
+                            <div class="info-aug"><div class="info-aug-name">폭파</div><div>Lv.1 맞으면 주변 장애물이 사라지고, 소환 +25%</div><div>Lv.2 범위가 넓어지고 소환 +10%</div><div>Lv.3 범위가 더 넓어지고 소환 +20%</div></div>
+                            <div class="info-aug"><div class="info-aug-name">도박</div><div>Lv.1 점수 0.7~1.5배</div><div>Lv.2 0.8~1.7배</div><div>Lv.3 1~2배</div></div>
+                            <div class="info-aug"><div class="info-aug-name">분노</div><div>Lv.1 게이지 25% 이하에서 점수 1.2배, 피격 피해 15% 감소</div><div>Lv.2 30% 이하, 점수 1.3배, 피해 20% 감소</div><div>Lv.3 40% 이하, 점수 1.5배, 피해 35% 감소</div></div>
+                            <div class="info-aug"><div class="info-aug-name">역습</div><div>Lv.1 맞은 뒤 1초 동안 점수 1.3배</div><div>Lv.2 1초 동안 1.7배</div><div>Lv.3 1.5초 동안 2배</div></div>
+                            <div class="info-aug"><div class="info-aug-name">미래</div><div>Lv.1 나온 증강이 25% 확률로 더 강해짐</div><div>Lv.2 증강을 고르면 최대 게이지의 25% 회복</div></div>
+                            <div class="info-aug"><div class="info-aug-name">저격</div><div>Lv.1 가장 먼 구간은 점수가 없고, 지날 때 점수 1.3배</div><div>Lv.2 1점 구간까지 점수가 없고, 1.5배</div><div>Lv.3 지날 때 1.8배, 35% 확률로 콤보 +2</div></div>
+                          </div>
+                        </div>
+                      </section>
+                    </div>
+                    </div>
+                    <div class="info-ch info-ch--mode info-ch--multi">
+                      <div class="info-ch-title">멀티</div>
+                      <p>한 화면에서 둘이 같이 플레이합니다.</p>
+                      <p>화이트는 A/D, 그레이는 방향키로 움직입니다.</p>
+                      <p>두 뱀은 서로 부딪히지 않습니다.</p>
+                      <p>상대가 먼저 죽거나, 30점을 먼저 채우면 이깁니다.</p>
+                      <p>컴퓨터에서는 방을 만들어 온라인으로도 할 수 있습니다.</p>
+                    </div>
+                    <div class="info-ch info-ch--mode info-ch--practice">
+                      <div class="info-ch-title">연습</div>
+                      <p>속도, 회전, 장애물, 콤보, 무적을 직접 바꿀 수 있습니다.</p>
+                      <p>시간이 지나도 속도나 점수 보너스가 오르지 않습니다.</p>
+                      <p>이 모드의 기록은 최고 점수와 업적에 남지 않습니다.</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+              <section class="info-box">
+                <button type="button" class="info-box-head" aria-expanded="false">
+                  <span>재화와 보석</span>
+                  <span class="info-box-chev" aria-hidden="true"></span>
+                </button>
+                <div class="info-box-body">
+                  <div class="info-box-body-inner info-copy">
+                    <div class="info-ch">
+                      <div class="info-ch-title">토큰</div>
+                      <p>게임이 끝나면 점수 5점당 토큰 1개를 받습니다.</p>
+                      <p>게임을 10초 이상 진행해야 토큰을 받습니다.</p>
+                      <p>하드와 혼돈에서는 토큰을 1.5배로 받습니다.</p>
+                      <p>연습, 로그라이크, 멀티에서는 토큰을 받지 않습니다.</p>
+                      <p>모은 토큰으로 보석을 강화합니다.</p>
+                    </div>
+                    <div class="info-ch">
+                      <div class="info-ch-title">보석</div>
+                      <p>일반, 하드, 혼돈에서 장애물에 보석 조각이 가끔 붙습니다.</p>
+                      <p>그 장애물에서 점수를 얻으면 조각을 받습니다.</p>
+                      <p>같은 조각 3개를 모으면 보석이 열리고, 그때부터 효과가 적용됩니다.</p>
+                      <p>토큰으로 강화합니다. 실패해도 보석은 깨지지 않고 레벨도 그대로입니다.</p>
+                      <p>실패할 때마다 그 단계의 성공 확률이 2% 추가됩니다. 성공하면 사라집니다.</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
           </div>
           <div id="menu-info-patchnotes" class="menu-info-pane" role="tabpanel" tabindex="0" aria-label="패치노트" aria-hidden="true">
-            <div class="space-y-8 text-left text-[13px] leading-snug text-zinc-400 sm:text-[14px] sm:leading-relaxed">
-              <section class="space-y-3">
-                <h3 class="text-[12px] font-extrabold tracking-tight text-zinc-200">ver.1.5</h3>
-                <ul class="list-inside list-disc space-y-3.5">
-                  <li>로그라이크 증강 <strong class="text-zinc-200">성장·표식·폭파·도박·분노·역습·미래</strong> 추가</li>
-                  <li>로그라이크 밸런스·UI 조정</li>
-                </ul>
+            <div class="info-stack" data-acc="patch">
+              <section class="info-box is-open">
+                <button type="button" class="info-box-head" aria-expanded="true">
+                  <span>ver.1.7</span>
+                  <span class="info-box-chev" aria-hidden="true"></span>
+                </button>
+                <div class="info-box-body">
+                  <div class="info-box-body-inner info-copy">
+                    <ul>
+                      <li>재화 이름을 <strong class="text-zinc-200">토큰</strong>으로 바꿨습니다</li>
+                      <li>일반, 하드, 혼돈에서 보석 조각을 모아 보석을 열 수 있습니다</li>
+                      <li>열린 보석은 모두 적용되고, 토큰으로 강화할 수 있습니다</li>
+                      <li>강화에 실패해도 보석은 깨지지 않습니다</li>
+                    </ul>
+                  </div>
+                </div>
               </section>
-              <section class="space-y-3">
-                <h3 class="text-[12px] font-extrabold tracking-tight text-zinc-200">ver.1.4</h3>
-                <ul class="list-inside list-disc space-y-3.5">
-                  <li><strong class="text-zinc-200">로그라이크</strong> 모드 추가</li>
-                  <li>게이지·증강 선택(15초마다 3택1) 시스템</li>
-                  <li>기본 증강 <strong class="text-zinc-200">활력·예리·노다지·질주·보호막·연계</strong></li>
-                </ul>
+              <section class="info-box">
+                <button type="button" class="info-box-head" aria-expanded="false">
+                  <span>ver.1.6</span>
+                  <span class="info-box-chev" aria-hidden="true"></span>
+                </button>
+                <div class="info-box-body">
+                  <div class="info-box-body-inner info-copy">
+                    <ul>
+                      <li>상세정보를 <strong class="text-zinc-200">정보</strong>와 <strong class="text-zinc-200">패치노트</strong>로 나눴습니다</li>
+                      <li>점수, 모드, 재화 설명을 짧게 정리했습니다</li>
+                    </ul>
+                  </div>
+                </div>
               </section>
-              <section class="space-y-3">
-                <h3 class="text-[12px] font-extrabold tracking-tight text-zinc-200">ver.1.3</h3>
-                <ul class="list-inside list-disc space-y-3.5">
-                  <li>메뉴 <strong class="text-zinc-200">허브</strong>(업적 등) 추가</li>
-                  <li>튜토리얼 후 <strong class="text-zinc-200">메인 안내</strong> 추가</li>
-                </ul>
+              <section class="info-box">
+                <button type="button" class="info-box-head" aria-expanded="false">
+                  <span>ver.1.5</span>
+                  <span class="info-box-chev" aria-hidden="true"></span>
+                </button>
+                <div class="info-box-body">
+                  <div class="info-box-body-inner info-copy">
+                    <ul>
+                      <li>로그라이크 증강 <strong class="text-zinc-200">성장·표식·폭파·도박·분노·역습·미래</strong> 추가</li>
+                      <li>로그라이크 밸런스·UI 조정</li>
+                    </ul>
+                  </div>
+                </div>
               </section>
-              <section class="space-y-3">
-                <h3 class="text-[12px] font-extrabold tracking-tight text-zinc-200">ver.1.2</h3>
-                <ul class="list-inside list-disc space-y-3.5">
-                  <li>혼돈 디버프 <strong class="text-zinc-200">「시야 축소」</strong> 추가</li>
-                  <li>하드 튜토리얼 중에도 뱀을 조작할 수 있습니다</li>
-                </ul>
+              <section class="info-box">
+                <button type="button" class="info-box-head" aria-expanded="false">
+                  <span>ver.1.4</span>
+                  <span class="info-box-chev" aria-hidden="true"></span>
+                </button>
+                <div class="info-box-body">
+                  <div class="info-box-body-inner info-copy">
+                    <ul>
+                      <li><strong class="text-zinc-200">로그라이크</strong> 모드 추가</li>
+                      <li>게이지·증강 선택(15초마다 3택1) 시스템</li>
+                      <li>기본 증강 <strong class="text-zinc-200">활력·예리·노다지·질주·보호막·연계</strong></li>
+                    </ul>
+                  </div>
+                </div>
               </section>
-              <section class="space-y-3">
-                <h3 class="text-[12px] font-extrabold tracking-tight text-zinc-200">ver.1.1</h3>
-                <ul class="list-inside list-disc space-y-3.5">
-                  <li><strong class="text-zinc-200">움직이는 장애물</strong> 추가</li>
-                  <li>업적 <strong class="text-zinc-200">「무브먼트」</strong> 추가</li>
-                </ul>
+              <section class="info-box">
+                <button type="button" class="info-box-head" aria-expanded="false">
+                  <span>ver.1.3</span>
+                  <span class="info-box-chev" aria-hidden="true"></span>
+                </button>
+                <div class="info-box-body">
+                  <div class="info-box-body-inner info-copy">
+                    <ul>
+                      <li>메뉴 <strong class="text-zinc-200">허브</strong>(업적 등) 추가</li>
+                      <li>튜토리얼 후 <strong class="text-zinc-200">메인 안내</strong> 추가</li>
+                    </ul>
+                  </div>
+                </div>
               </section>
-              <section class="space-y-3">
-                <h3 class="text-[12px] font-extrabold tracking-tight text-zinc-200">ver.1.0</h3>
-                <ul class="list-inside list-disc space-y-3.5">
-                  <li>모바일에서도 플레이할 수 있습니다</li>
-                  <li>화면 <strong class="text-zinc-200">왼쪽·오른쪽</strong>을 터치해 뱀을 조작합니다(PC의 A/D와 같습니다)</li>
-                  <li><strong class="text-zinc-200">양쪽을 동시에</strong> 터치하면 <strong class="text-zinc-200">일시정지</strong>됩니다</li>
-                </ul>
+              <section class="info-box">
+                <button type="button" class="info-box-head" aria-expanded="false">
+                  <span>ver.1.2</span>
+                  <span class="info-box-chev" aria-hidden="true"></span>
+                </button>
+                <div class="info-box-body">
+                  <div class="info-box-body-inner info-copy">
+                    <ul>
+                      <li>혼돈 디버프 <strong class="text-zinc-200">「시야 축소」</strong> 추가</li>
+                      <li>하드 튜토리얼 중에도 뱀을 조작할 수 있습니다</li>
+                    </ul>
+                  </div>
+                </div>
+              </section>
+              <section class="info-box">
+                <button type="button" class="info-box-head" aria-expanded="false">
+                  <span>ver.1.1</span>
+                  <span class="info-box-chev" aria-hidden="true"></span>
+                </button>
+                <div class="info-box-body">
+                  <div class="info-box-body-inner info-copy">
+                    <ul>
+                      <li><strong class="text-zinc-200">움직이는 장애물</strong> 추가</li>
+                      <li>업적 <strong class="text-zinc-200">「무브먼트」</strong> 추가</li>
+                    </ul>
+                  </div>
+                </div>
+              </section>
+              <section class="info-box">
+                <button type="button" class="info-box-head" aria-expanded="false">
+                  <span>ver.1.0</span>
+                  <span class="info-box-chev" aria-hidden="true"></span>
+                </button>
+                <div class="info-box-body">
+                  <div class="info-box-body-inner info-copy">
+                    <ul>
+                      <li>모바일에서도 플레이할 수 있습니다</li>
+                      <li>화면 <strong class="text-zinc-200">왼쪽·오른쪽</strong>을 터치해 뱀을 조작합니다(PC의 A/D와 같습니다)</li>
+                      <li><strong class="text-zinc-200">양쪽을 동시에</strong> 터치하면 <strong class="text-zinc-200">일시정지</strong>됩니다</li>
+                    </ul>
+                  </div>
+                </div>
               </section>
             </div>
           </div>
@@ -345,15 +401,9 @@
     </div>
     <div id="menu-hub-wrap" class="absolute right-5 top-[18px] z-30 flex flex-col items-end sm:right-8 sm:top-[30px]">
       <div class="flex items-center gap-2">
-        <div id="scales-display" class="scales-pill hidden" role="status" aria-label="비늘" aria-describedby="scales-tooltip" tabindex="0">
-          <svg class="scales-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 3.2 C16.6 3.2 20 6.9 20 11 C20 16 16.3 20.8 12 20.8 C7.7 20.8 4 16 4 11 C4 6.9 7.4 3.2 12 3.2 Z" fill="#34d399"/>
-            <path d="M12 3.2 C16.6 3.2 20 6.9 20 11 C20 12.7 19.4 14.5 18.4 16 C15.8 11.8 11.8 8.9 7 8 C8.1 5.1 9.8 3.2 12 3.2 Z" fill="#6ee7b7" opacity="0.7"/>
-          </svg>
+        <div id="scales-display" class="scales-pill" role="status" aria-label="토큰">
+          <img class="scales-icon" src="assets/icons/token.png" alt="">
           <span id="scales-count" class="scales-count">0</span>
-          <span id="scales-tooltip" class="scales-tooltip" role="tooltip">
-            비늘은 게임종료 시 점수 5점당 1개를 얻을 수 있습니다. 또한 하드, 혼돈 모드에선 비늘을 1.5배로 줍니다.
-          </span>
         </div>
         <button
           type="button"
@@ -378,9 +428,9 @@
           <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/crown.svg" alt="" class="menu-hub-icon" loading="lazy" decoding="async" />
           <span>업적</span>
         </button>
-        <button type="button" class="menu-hub-item opacity-40 pointer-events-none" data-hub="customize" role="menuitem" aria-disabled="true" tabindex="-1">
-          <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/shirt.svg" alt="" class="menu-hub-icon" loading="lazy" decoding="async" />
-          <span>꾸미기</span>
+        <button type="button" class="menu-hub-item" data-hub="gems" role="menuitem">
+          <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/gem.svg" alt="" class="menu-hub-icon" loading="lazy" decoding="async" />
+          <span>보석</span>
         </button>
         <button type="button" class="menu-hub-item" data-hub="quest" role="menuitem">
           <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/scroll-text.svg" alt="" class="menu-hub-icon" loading="lazy" decoding="async" />
@@ -537,7 +587,7 @@
               <span class="achievement-title">인생은 한방</span>
               <span class="achievement-kind">[일반 업적]</span>
             </div>
-            <p class="achievement-desc">로그라이크 모드에서 하나의 장애물로 13점 이상을 얻으세요</p>
+            <p class="achievement-desc">로그라이크 모드에서 하나의 장애물로 15점 이상을 얻으세요</p>
           </div>
           <div role="listitem" class="achievement-card" data-achievement-id="rogue_god" data-achievement-hidden="false">
             <div class="achievement-title-row">
@@ -568,19 +618,6 @@
           >
             <div class="achievement-title-row">
               <span class="achievement-title">연습의 대가</span>
-              <span class="achievement-kind">[숨겨진 업적]</span>
-            </div>
-            <p class="achievement-desc achievement-desc-hidden">???</p>
-          </div>
-          <div
-            role="listitem"
-            class="achievement-card achievement-hidden"
-            data-achievement-id="hidden_golden_death"
-            data-achievement-hidden="true"
-            data-reveal-desc="황금 장애물에 죽으세요!"
-          >
-            <div class="achievement-title-row">
-              <span class="achievement-title">황금빛 죽음</span>
               <span class="achievement-kind">[숨겨진 업적]</span>
             </div>
             <p class="achievement-desc achievement-desc-hidden">???</p>
@@ -640,10 +677,9 @@
         </div>
       </div>
 
-      <!-- 꾸미기 패널 (준비 중) -->
       <div
         id="menu-customize-panel"
-        class="flex w-[min(18rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-zinc-500/45 bg-zinc-700/92 text-zinc-200 shadow-xl shadow-black/40 ring-1 ring-zinc-400/25"
+        class="flex w-[min(22rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-zinc-500/45 bg-zinc-700/92 text-zinc-200 shadow-xl shadow-black/40 ring-1 ring-zinc-400/25"
         role="region"
         aria-labelledby="menu-customize-title"
         aria-hidden="true"
@@ -651,18 +687,16 @@
         <div class="border-b border-zinc-500/35 bg-zinc-600/35 px-4 py-3">
           <div class="flex items-center gap-2">
             <button type="button" class="menu-hub-back" data-hub-back aria-label="뒤로">&larr;</button>
-            <h2 id="menu-customize-title" class="text-[15px] font-extrabold tracking-tight text-zinc-50">꾸미기</h2>
+            <h2 id="menu-customize-title" class="text-[15px] font-extrabold tracking-tight text-zinc-50">보석</h2>
           </div>
         </div>
-        <div
-          class="achievements-scroll min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden bg-zinc-700/50 px-2 py-3"
-          id="customize-list"
-          role="list"
-          aria-label="장신구 목록"
-        ></div>
+        <div class="relic-scroll menu-info-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-zinc-700/50">
+          <p id="relic-token-line" class="relic-token-line">토큰 0</p>
+          <p id="relic-result" class="relic-result"></p>
+          <div id="relic-list"></div>
+        </div>
       </div>
 
-      <!-- 퀘스트 패널 (준비 중) -->
       <div
         id="menu-quest-panel"
         class="flex w-[min(18rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-zinc-500/45 bg-zinc-700/92 text-zinc-200 shadow-xl shadow-black/40 ring-1 ring-zinc-400/25"
@@ -704,23 +738,23 @@
               </div>
               <div class="gacha-result-copy">
                 <div id="gacha-result-kicker" class="gacha-result-kicker">장신구 뽑기</div>
-                <div id="gacha-result-title" class="gacha-result-title">75비늘로 1회 뽑기</div>
-                <p id="gacha-result-desc" class="gacha-result-desc">비늘 또는 머리 장신구를 얻을 수 있어요.</p>
+                <div id="gacha-result-title" class="gacha-result-title">75토큰으로 1회 뽑기</div>
+                <p id="gacha-result-desc" class="gacha-result-desc">토큰 또는 머리 장신구를 얻을 수 있어요.</p>
               </div>
             </div>
             <button id="gacha-draw-button" type="button" class="gacha-draw-button">
               <span>1회 뽑기</span>
-              <strong>75 비늘</strong>
+              <strong>75 토큰</strong>
             </button>
             <div id="gacha-owned-summary" class="gacha-owned-summary">보유 장신구 0/6</div>
           </div>
           <div class="gacha-rates" aria-label="뽑기 확률">
-            <div><span>30%</span><strong>30비늘</strong></div>
-            <div><span>15%</span><strong>75비늘</strong></div>
-            <div><span>5%</span><strong>300비늘</strong></div>
+            <div><span>30%</span><strong>30토큰</strong></div>
+            <div><span>15%</span><strong>75토큰</strong></div>
+            <div><span>5%</span><strong>300토큰</strong></div>
             <div><span>50%</span><strong class="grade-common">일반 장신구</strong></div>
           </div>
-          <p class="gacha-duplicate-note">중복 일반 장신구는 75비늘로 바뀝니다. 한정판은 일반 뽑기에서 나오지 않습니다.</p>
+          <p class="gacha-duplicate-note">중복 일반 장신구는 75토큰으로 바뀝니다. 한정판은 일반 뽑기에서 나오지 않습니다.</p>
         </div>
       </div>
     </div>
@@ -907,7 +941,7 @@
   <div class="main-intro-tip main-intro-tip-info">
     <div class="main-intro-tip-arrow" aria-hidden="true">↑</div>
     <strong>정보</strong>
-    점수 체계, 모드 정보, 패치노트를 확인할 수 있어요
+    점수, 모드, 재화와 패치노트를 볼 수 있어요
   </div>
   <div class="main-intro-tip main-intro-tip-achievements">
     <div class="main-intro-tip-arrow" aria-hidden="true">↑</div>
@@ -922,8 +956,8 @@
 </div>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="skins.js?v=20260709-mobileui2" defer></script>
+<script src="skins.js?v=20261018-noskin" defer></script>
 <script src="online.js?v=20260709-mobileui2" defer></script>
-<script src="main.js?v=20260711-sniper" defer></script>
+<script src="main.js?v=20261018-hardhit" defer></script>
 </body>
 </html>

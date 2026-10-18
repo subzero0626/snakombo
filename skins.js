@@ -107,14 +107,6 @@
   // 새로고침 시 항상 기본(classic)부터 시작 (저장/복원 없음)
   window.Skins = Skins;
 
-  // S 키로 글씨체 순환 전환 (입력창 포커스 중에는 무시)
-  document.addEventListener('keydown', function (e) {
-    if (e.key !== 's' && e.key !== 'S') return;
-    const el = e.target;
-    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
-    Skins.cycleTheme();
-  });
-
   // 표시용 웹폰트 미리 로드(캔버스 렌더 시 폴백 튐 최소화)
   try {
     if (document.fonts && document.fonts.load) {
