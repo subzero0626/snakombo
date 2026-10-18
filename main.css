@@ -205,7 +205,8 @@
     max-height: 640px;
   }
   #achievements-panel .achievements-scroll,
-  #menu-info-panel .menu-info-scroll {
+  #menu-info-panel .menu-info-scroll,
+  #menu-customize-panel .relic-scroll {
     scrollbar-width: thin;
     scrollbar-color: rgba(24,24,27,0.4) transparent;
   }
@@ -1021,11 +1022,13 @@
     100% { opacity: 0; transform: translateY(22px); }
   }
   #achievements-panel .achievements-scroll::-webkit-scrollbar,
-  #menu-info-panel .menu-info-scroll::-webkit-scrollbar {
+  #menu-info-panel .menu-info-scroll::-webkit-scrollbar,
+  #menu-customize-panel .relic-scroll::-webkit-scrollbar {
     width: 6px;
   }
   #achievements-panel .achievements-scroll::-webkit-scrollbar-thumb,
-  #menu-info-panel .menu-info-scroll::-webkit-scrollbar-thumb {
+  #menu-info-panel .menu-info-scroll::-webkit-scrollbar-thumb,
+  #menu-customize-panel .relic-scroll::-webkit-scrollbar-thumb {
     background: rgba(24,24,27,0.35);
     border-radius: 3px;
   }
@@ -1745,19 +1748,6 @@
   }
 
   .relic-scroll { padding: 10px 12px 14px; }
-  .relic-token-line {
-    margin: 0 0 4px;
-    font-size: 12px;
-    font-weight: 800;
-    color: #f4f4f5;
-  }
-  .relic-result {
-    min-height: 1.15em;
-    margin: 0 0 8px;
-    font-size: 11px;
-    line-height: 1.35;
-    color: #fbbf24;
-  }
   .relic-card {
     position: relative;
     overflow: hidden;

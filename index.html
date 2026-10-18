@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Snakombo</title>
 <link rel="icon" href="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/flame.svg" type="image/svg+xml">
-<link rel="stylesheet" href="main.css?v=20261018-pityfix">
+<link rel="stylesheet" href="main.css?v=20261018-gemui">
 <script>
   // 로딩 화면은 "처음 진입"에만 표시 (새로고침 플래시 방지용: 첫 페인트 전에 결정)
   (function () {
@@ -164,6 +164,7 @@
                       <p>이동, 회전, 장애물 생성이 일반보다 35% 빠릅니다.</p>
                       <p>장애물 사이 간격이 더 좁습니다.</p>
                       <p>이동 장애물은 25% 확률로 나옵니다.</p>
+                      <p>멀리 스칠 때의 0.5점이 사라지고 1점이 됩니다.</p>
                       <p>일반에서 40점을 넘기면 열립니다.</p>
                     </div>
                     <div class="info-ch info-ch--mode info-ch--chaos">
@@ -661,19 +662,6 @@
             </div>
             <p class="achievement-desc achievement-desc-hidden">???</p>
           </div>
-          <div
-            role="listitem"
-            class="achievement-card achievement-hidden"
-            data-achievement-id="hidden_dorumamu"
-            data-achievement-hidden="true"
-            data-reveal-desc="로그라이크 모드에서 3판 연속으로 첫번째 증강을 똑같은 것으로 고르세요"
-          >
-            <div class="achievement-title-row">
-              <span class="achievement-title">도루마무</span>
-              <span class="achievement-kind">[숨겨진 업적]</span>
-            </div>
-            <p class="achievement-desc achievement-desc-hidden">???</p>
-          </div>
         </div>
       </div>
 
@@ -691,8 +679,6 @@
           </div>
         </div>
         <div class="relic-scroll menu-info-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-zinc-700/50">
-          <p id="relic-token-line" class="relic-token-line">토큰 0</p>
-          <p id="relic-result" class="relic-result"></p>
           <div id="relic-list"></div>
         </div>
       </div>
@@ -958,6 +944,6 @@
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="skins.js?v=20261018-noskin" defer></script>
 <script src="online.js?v=20260709-mobileui2" defer></script>
-<script src="main.js?v=20261018-hardhit" defer></script>
+<script src="main.js?v=20261018-hardhalf" defer></script>
 </body>
 </html>

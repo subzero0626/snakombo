@@ -1548,7 +1548,6 @@ function pickRogueAugment(idx) {
   if ((rogueAugmentLevels['future'] || 0) >= 2) {
     rogueGauge = Math.min(rogueMaxGauge, rogueGauge + rogueMaxGauge * 0.25);
   }
-  if (isOpeningPick) noteRogueFirstAugmentPick(base.id);
   checkRogueAugmentAchievementsLive();
   rogueAugmentPickedIdx = idx;
   rogueAugmentCloseAt = performance.now();
@@ -3659,37 +3658,8 @@ function checkAchievementsAfterRun(finalScore, maxCombo, comboBonusTotal) {
   }
 }
 
-const ROGUE_FIRST_AUG_STREAK_KEY = 'snakombo_rogue_first_aug_streak_v1';
 const ROGUE_GOD_MS = 135000;
 const ROGUE_LV2_ONLY_MS = 75000;
-
-function getRogueFirstAugmentStreak() {
-  try {
-    const raw = localStorage.getItem(ROGUE_FIRST_AUG_STREAK_KEY);
-    if (!raw) return { id: '', count: 0 };
-    const obj = JSON.parse(raw);
-    const id = obj && typeof obj.id === 'string' ? obj.id : '';
-    const count = obj && Number.isFinite(obj.count) ? Math.max(0, obj.count | 0) : 0;
-    return { id, count };
-  } catch {
-    return { id: '', count: 0 };
-  }
-}
-
-function saveRogueFirstAugmentStreak(id, count) {
-  try {
-    localStorage.setItem(ROGUE_FIRST_AUG_STREAK_KEY, JSON.stringify({ id: id || '', count: count | 0 }));
-  } catch (_) {}
-}
-
-/** 로그라이크 시작 직후 첫 증강 선택 — 도루마무 */
-function noteRogueFirstAugmentPick(augId) {
-  if (!augId || tutorialMode) return;
-  const prev = getRogueFirstAugmentStreak();
-  const nextCount = prev.id === augId ? prev.count + 1 : 1;
-  saveRogueFirstAugmentStreak(augId, nextCount);
-  if (nextCount >= 3) unlockAchievement('hidden_dorumamu');
-}
 
 function countRogueAugmentsAtLevel(level) {
   let n = 0;
@@ -4851,6 +4821,7 @@ function animate() {
           : chaosHasDebuff('combo_short')
             ? 1250
             : COMBO_TIMEOUT_MS) + (isRogue() ? rogueComboExtraMs : 0) + relicEchoMs();
+      const dropHalfBand = gameMode === 'hard' || chaosHasDebuff('no_half_point');
 
       function minEdgeDistForHead(obs, hx, hy) {
         let m = Infinity;
@@ -4869,7 +4840,7 @@ function animate() {
         let base, bonus;
         // 점수 구간을 소폭 확장 (기존 3/2/1 → 3.6/2.4/1.2)
         if (ratio >= 3.6) {
-          if (chaosHasDebuff('no_half_point')) { base = 1; bonus = 0.5 * Math.floor(elapsed / 15); }
+          if (dropHalfBand) { base = 1; bonus = 0.5 * Math.floor(elapsed / 15); }
           else { base = 0.5; bonus = 0.5 * Math.floor(elapsed / 30); }
         }         else if (ratio >= 2.4) { base = 1; bonus = 0.5 * Math.floor(elapsed / 15); }
         else if (ratio >= 1.2) { base = 2; bonus = 0.5 * Math.floor(elapsed / 15); }
@@ -4922,7 +4893,7 @@ function animate() {
                       localComboGrayValue++;
                       localLastScoreTimeGray = nowMs;
                       const comboBonus = localComboGrayValue >= 2 ? (localComboGrayValue - 1) * 0.5 : 0;
-                      const pts = (obs[bestKey] || (chaosHasDebuff('no_half_point') ? 1 : 0.5)) + comboBonus;
+                      const pts = (obs[bestKey] || (dropHalfBand ? 1 : 0.5)) + comboBonus;
                       if (!(tutorialMode && tutorialStep === 3)) {
                         localScoreGrayValue = roundScore(localScoreGrayValue + pts);
                         if (
@@ -4953,7 +4924,7 @@ function animate() {
                       lastScoreTime = nowMs;
                       const comboStep = 0.5;
                       const comboBonus = combo >= 2 ? (combo - 1) * comboStep : 0;
-                      let pts = (obs[bestKey] || (chaosHasDebuff('no_half_point') ? 1 : 0.5)) + comboBonus;
+                      let pts = (obs[bestKey] || (dropHalfBand ? 1 : 0.5)) + comboBonus;
                       // 로그라이크 표식: 표식당 추가 점수, 소모 시 Lv.3 전이(35%)
                       if (isRogue() && rogueMarkBonus > 0) {
                         const m = obs.rogueMark || 0;
@@ -6711,8 +6682,6 @@ function updateScalesUI() {
     wrap.classList.toggle('hidden', !FEATURES.scales);
     wrap.style.display = FEATURES.scales ? '' : 'none';
   }
-  const tokenLine = document.getElementById('relic-token-line');
-  if (tokenLine) tokenLine.textContent = '토큰 ' + getScales();
   if (typeof renderRelicPanel === 'function') renderRelicPanel();
 }
 
@@ -7082,8 +7051,6 @@ const RELIC_STEPS = {
 };
 const RELIC_PITY_STEP = 0.02;
 let relicCache = null;
-let relicLastResult = '';
-
 function bindRelicIcons() {
   for (let i = 0; i < RELIC_DEFS.length; i++) {
     const img = new Image();
@@ -7309,7 +7276,6 @@ function grantRelicFragment(obs) {
   if (next >= 3) {
     st.fragments[def.id] = 0;
     st.levels[def.id] = 1;
-    relicLastResult = def.name + ' 보석이 열렸습니다.';
     saveRelicState(st);
     showRelicUnlockToast(def);
     return def.name + ' 조각 획득';
@@ -7325,12 +7291,10 @@ function enhanceRelic(id) {
   const lv = st.levels[id] || 0;
   const step = RELIC_STEPS[lv];
   if (!step) {
-    relicLastResult = lv >= RELIC_MAX_LEVEL ? '더 이상 강화할 수 없습니다.' : '';
     renderRelicPanel();
     return;
   }
   if (getScales() < step.cost) {
-    relicLastResult = '토큰이 부족합니다.';
     renderRelicPanel();
     return;
   }
@@ -7339,14 +7303,12 @@ function enhanceRelic(id) {
   const chance = relicSuccessChance(id, lv);
   if (Math.random() >= chance) {
     st.pity[id] = { lv: lv, n: relicPityFails(id, lv) + 1 };
-    relicLastResult = def.name + ' 강화에 실패했습니다. 레벨은 그대로입니다.';
     saveRelicState(st);
     return;
   }
   st.levels[id] = lv + 1;
   st.fragments[id] = 0;
   st.pity[id] = { lv: lv + 1, n: 0 };
-  relicLastResult = def.name + ' Lv.' + (lv + 1);
   saveRelicState(st);
 }
 function relicNum(n) {
@@ -7380,10 +7342,6 @@ function lightGemTint(hex) {
 }
 function renderRelicPanel() {
   const list = document.getElementById('relic-list');
-  const tokenLine = document.getElementById('relic-token-line');
-  const result = document.getElementById('relic-result');
-  if (tokenLine) tokenLine.textContent = '토큰 ' + getScales();
-  if (result) result.textContent = relicLastResult;
   if (!list) return;
   const st = relicState();
   const tokens = getScales();
