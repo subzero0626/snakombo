@@ -4821,7 +4821,8 @@ function animate() {
           : chaosHasDebuff('combo_short')
             ? 1250
             : COMBO_TIMEOUT_MS) + (isRogue() ? rogueComboExtraMs : 0) + relicEchoMs();
-      const dropHalfBand = gameMode === 'hard' || chaosHasDebuff('no_half_point');
+      const dropHalfBand = chaosHasDebuff('no_half_point');
+      const scoreMaxRatio = gameMode === 'hard' ? 3.6 : (isRogue() ? rogueSniperMaxRatio : 5);
 
       function minEdgeDistForHead(obs, hx, hy) {
         let m = Infinity;
@@ -4859,7 +4860,7 @@ function animate() {
           if (obs.fadeOut) continue;
 
           const minEdgeDist = minEdgeDistForHead(obs, hx, hy);
-          if (minEdgeDist <= HEAD_WIDTH * (isRogue() ? rogueSniperMaxRatio : 5) * relicScoreRangeMult()) {
+          if (minEdgeDist <= HEAD_WIDTH * scoreMaxRatio * relicScoreRangeMult()) {
             const pts0 = basePtsFromMinEdge(minEdgeDist);
             if (!obs[nearKey]) obs[nearKey] = nowMs;
             obs[bestKey] = Math.max(obs[bestKey] || 0, pts0);
