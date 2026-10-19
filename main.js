@@ -3728,6 +3728,22 @@ function hasAllRelicsOpen() {
   return RELIC_DEFS.length > 0;
 }
 
+/** 열어둔 뒤 비활성화한 보석 수 */
+function countDeactivatedRelics() {
+  try {
+    if (typeof RELIC_DEFS === 'undefined') return 0;
+    const st = relicState();
+    let n = 0;
+    for (let i = 0; i < RELIC_DEFS.length; i++) {
+      const id = RELIC_DEFS[i].id;
+      if ((st.levels[id] || 0) >= 1 && st.off && st.off[id]) n += 1;
+    }
+    return n;
+  } catch (_) {
+    return 0;
+  }
+}
+
 function checkExtraAchievements() {
   if (countOwnedShopBackgrounds() >= 5) unlockAchievement('collector_bg');
   if (
