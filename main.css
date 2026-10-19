@@ -728,6 +728,7 @@
     font-weight: 700;
     line-height: 1.4;
     pointer-events: none;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
   }
   .profile-ach-tip[hidden] {
     display: none;
@@ -741,6 +742,15 @@
     background: rgba(24, 24, 27, 0.96);
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
     pointer-events: none;
+  }
+  html.is-mobile .profile-ach-tip {
+    max-width: 14rem;
+    padding: 0.35rem 0.5rem;
+    font-size: 11px;
+  }
+  html.is-mobile .profile-bg-tip {
+    padding: 0.22rem;
+    border-radius: 0.45rem;
   }
   .profile-bg-tip[hidden] {
     display: none;
@@ -2582,20 +2592,32 @@
     margin: 6px 0;
   }
   .relic-lv {
-    display: flex;
+    display: grid;
+    grid-template-columns: 2.4rem minmax(0, 1fr);
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+    column-gap: 8px;
+    box-sizing: border-box;
+    min-height: 18px;
     padding: 1px 4px;
     border-radius: 4px;
     font-size: 11px;
-    line-height: 1.35;
+    font-weight: 700;
+    line-height: 16px;
     color: #a1a1aa;
+  }
+  .relic-lv > span:first-child {
+    font-variant-numeric: tabular-nums;
+  }
+  .relic-lv > span:last-child {
+    min-width: 0;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .relic-lv.is-now {
     background: rgba(255, 255, 255, 0.08);
     color: #fafafa;
-    font-weight: 800;
   }
   .relic-meta {
     display: flex;

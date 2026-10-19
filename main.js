@@ -58,6 +58,11 @@ function applyMobileMenuScale() {
   m.style.setProperty('transform', `translate(${left}px, ${top}px) scale(${scale})`, 'important');
 }
 
+function mobileMenuScale() {
+  if (!IS_MOBILE) return 1;
+  return Math.min(window.innerWidth / MOBILE_MENU_W, window.innerHeight / MOBILE_MENU_H);
+}
+
 function applyMobileToastScale() {
   const root = document.getElementById('achievement-toast-root');
   if (!root) return;
@@ -77,6 +82,31 @@ function applyMobileToastScale() {
   root.style.transform = 'scale(' + scale + ')';
   root.style.right = ((vw - scaledW) / 2 + inset) + 'px';
   root.style.bottom = ((vh - scaledH) / 2 + inset) + 'px';
+}
+
+/** 프로필 업적/배경 팁: menu-screen과 같은 스케일로 맞춤(모바일 fixed 오버레이용) */
+function placeProfileFloatingTip(tip, anchorRect, logicalWidth) {
+  if (!tip || !anchorRect) return;
+  const scale = mobileMenuScale();
+  const width = Math.min(logicalWidth, (window.innerWidth - 16) / scale);
+  let left = anchorRect.left;
+  const visualW = width * scale;
+  if (left + visualW > window.innerWidth - 8) left = window.innerWidth - visualW - 8;
+  if (left < 8) left = 8;
+  tip.style.width = width + 'px';
+  tip.style.left = left + 'px';
+  tip.style.top = (anchorRect.bottom + 6) + 'px';
+  if (IS_MOBILE) {
+    tip.style.transformOrigin = 'top left';
+    tip.style.transform = 'scale(' + scale + ')';
+  } else {
+    tip.style.transform = '';
+    tip.style.transformOrigin = '';
+  }
+  const visualH = tip.offsetHeight * scale;
+  if (anchorRect.bottom + 6 + visualH > window.innerHeight - 8) {
+    tip.style.top = Math.max(8, anchorRect.top - visualH - 6) + 'px';
+  }
 }
 
 function isMobilePortrait() {
@@ -3296,8 +3326,10 @@ function triggerGameOver(cause) {
   // 업적: 연습·로그라이크 제외. 개별 업적의 모드 제한은 checkAchievementsAfterRun에서 처리.
   if (!tutorialMode && gameMode !== 'practice' && gameMode !== 'roguelike') {
     checkAchievementsAfterRun(score, maxComboThisRun, comboBonusPointsThisRun);
-    // 토큰: 5점당 1개. 하드/혼돈 1.5배. 연습·로그라이크·멀티는 주지 않음.
-    if (gameMode !== 'multi') grantRunTokens(calcTokenGain(score, tokenPlayMs));
+  }
+  // 토큰: 일반/하드/혼돈은 점수 기반, 로그라이크는 초당 1.5. 연습·멀티는 주지 않음. 지급량은 반올림 정수.
+  if (!tutorialMode && gameMode !== 'practice' && gameMode !== 'multi') {
+    grantRunTokens(calcTokenGain(score, tokenPlayMs));
   }
   if (!tutorialMode) grantProfileXp(profileXpForRun());
 }
@@ -6656,7 +6688,7 @@ function shownScales() {
 }
 function grantRunTokens(n) {
   if (!FEATURES.scales) return 0;
-  n = Math.floor(n);
+  n = Math.round(Number(n));
   if (!(n > 0)) return getScales();
   tokenFlyPending += n;
   return setScales(getScales() + n);
@@ -6854,7 +6886,7 @@ function profileXpCap() {
 function roundProfileXp(n) {
   const v = Number(n);
   if (!Number.isFinite(v)) return 0;
-  return Math.round(v * 100) / 100;
+  return Math.round(v);
 }
 
 function profileProgress(xp) {
@@ -7563,20 +7595,7 @@ function bindProfilePanel() {
       else {
         tip.textContent = achRow.getAttribute('data-ach-tip') || '';
         tip.hidden = !tip.textContent;
-        if (!tip.hidden) {
-          const rect = achRow.getBoundingClientRect();
-          const width = Math.min(256, window.innerWidth - 16);
-          let left = rect.left;
-          if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
-          if (left < 8) left = 8;
-          tip.style.width = width + 'px';
-          tip.style.left = left + 'px';
-          tip.style.top = (rect.bottom + 6) + 'px';
-          const h = tip.offsetHeight;
-          if (rect.bottom + 6 + h > window.innerHeight - 8) {
-            tip.style.top = Math.max(8, rect.top - h - 6) + 'px';
-          }
-        }
+        if (!tip.hidden) placeProfileFloatingTip(tip, achRow.getBoundingClientRect(), 220);
       }
     }
     if (bgTip && bgImg) {
@@ -7590,18 +7609,7 @@ function bindProfilePanel() {
         } else {
           bgImg.src = src;
           bgTip.hidden = false;
-          const rect = bgRow.getBoundingClientRect();
-          const width = Math.min(280, window.innerWidth - 16);
-          let left = rect.left;
-          if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
-          if (left < 8) left = 8;
-          bgTip.style.width = width + 'px';
-          bgTip.style.left = left + 'px';
-          bgTip.style.top = (rect.bottom + 6) + 'px';
-          const h = bgTip.offsetHeight;
-          if (rect.bottom + 6 + h > window.innerHeight - 8) {
-            bgTip.style.top = Math.max(8, rect.top - h - 6) + 'px';
-          }
+          placeProfileFloatingTip(bgTip, bgRow.getBoundingClientRect(), 240);
         }
       }
     }
@@ -8101,7 +8109,7 @@ if (gachaDrawButton) {
 // 강화는 토큰을 쓰고, 실패해도 파괴·하락 없음. 일반/하드/혼돈만.
 // ============================================================
 const RELIC_SAVE_KEY = 'snakombo_relics_v1';
-const RELIC_MAX_LEVEL = 5;
+const RELIC_MAX_LEVEL = 7;
 const RELIC_DEFS = [
   { id: 'echo', name: '사파이어', desc: '콤보 유지 시간이 늘어납니다.', color: '#93c5fd', rgb: [147, 197, 253], icon: 'assets/icons/gem-echo.png' },
   { id: 'harvest', name: '토파즈', desc: '게임이 끝날 때 받는 토큰이 늘어납니다.', color: '#fbbf24', rgb: [251, 191, 36], icon: 'assets/icons/gem-harvest.png' },
@@ -8110,11 +8118,14 @@ const RELIC_DEFS = [
   { id: 'chase', name: '자수정', desc: '더 높은 점수부터 시작합니다.', color: '#c4b5fd', rgb: [196, 181, 253], icon: 'assets/icons/gem-chase.png' },
   { id: 'magnet', name: '오팔', desc: '죽을때 확률적으로 부활합니다.', color: '#67e8f9', rgb: [103, 232, 249], icon: 'assets/icons/gem-magnet.png' }
 ];
+// 강화 성공: 75→25%, 가격 30→150
 const RELIC_STEPS = {
-  1: { cost: 25, fail: 0.30 },
-  2: { cost: 40, fail: 0.45 },
-  3: { cost: 60, fail: 0.60 },
-  4: { cost: 90, fail: 0.75 }
+  1: { cost: 30, fail: 0.25 },
+  2: { cost: 50, fail: 0.35 },
+  3: { cost: 70, fail: 0.45 },
+  4: { cost: 95, fail: 0.55 },
+  5: { cost: 120, fail: 0.65 },
+  6: { cost: 150, fail: 0.75 }
 };
 const RELIC_PITY_STEP = 0.02;
 let relicCache = null;
@@ -8211,39 +8222,46 @@ function relicActiveLevel(id) {
   if (st.off && st.off[id]) return 0;
   return relicLevel(id);
 }
-const ECHO_MS = [0, 100, 200, 300, 400, 500];
+// index = Lv (0 미개방)
+const ECHO_MS = [0, 100, 200, 300, 400, 500, 600, 700];
+const HARVEST_BONUS = [0, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50];
+const CLING_CHANCE = [0, 0.05, 0.07, 0.09, 0.11, 0.11, 0.13, 0.15];
+const CALM_BONUS = [0, 0.05, 0.08, 0.11, 0.14, 0.17, 0.20, 0.25];
+const CHASE_START = [0, 5, 8, 11, 14, 17, 20, 25];
+const OPAL_CHANCE = [0, 0.05, 0.06, 0.07, 0.08, 0.08, 0.10, 0.12];
 function relicEchoMs() {
   if (!relicEffectsOn()) return 0;
   return ECHO_MS[relicActiveLevel('echo')] || 0;
 }
-const CLING_CHANCE = [0, 0.08, 0.1, 0.12, 0.14, 0.16];
-const OPAL_CHANCE = [0, 0.04, 0.055, 0.07, 0.085, 0.1];
 function rollRubyScore(pts) {
   if (!relicEffectsOn()) return { pts: pts, base: pts, mult: 1 };
   const lv = relicActiveLevel('cling');
   const chance = CLING_CHANCE[lv] || 0;
   if (!(chance > 0) || Math.random() >= chance) return { pts: pts, base: pts, mult: 1 };
-  const mult = lv >= 4 ? 3 : 2;
+  const mult = lv >= 5 ? 3 : 2;
   return { pts: roundScore(pts * mult), base: pts, mult: mult };
 }
 function relicScoreRangeMult() {
   if (!relicEffectsOn()) return 1;
-  const lv = relicActiveLevel('calm');
-  return lv > 0 ? 1 + lv * 0.03 : 1;
+  const bonus = CALM_BONUS[relicActiveLevel('calm')] || 0;
+  return bonus > 0 ? 1 + bonus : 1;
 }
 function applyChaseStartScore() {
   if (!relicEffectsOn() || localPlayEnabled || isOnlineMode()) return 0;
-  const pts = relicActiveLevel('chase') * 5;
+  const pts = CHASE_START[relicActiveLevel('chase')] || 0;
   if (pts > 0) score = pts;
   return pts;
 }
 function calcTokenGain(finalScore, playMs) {
   if (!(playMs >= 10000)) return 0;
-  if (tutorialMode || gameMode === 'practice' || gameMode === 'roguelike' || gameMode === 'multi') return 0;
+  if (tutorialMode || gameMode === 'practice' || gameMode === 'multi') return 0;
+  if (gameMode === 'roguelike') {
+    return Math.max(0, Math.round((rogueRunMs / 1000) * 1.5));
+  }
   const scaleMult = (gameMode === 'hard' || gameMode === 'chaos') ? 1.5 : 1;
-  let tokenGain = Math.floor((finalScore / 5) * scaleMult);
-  if (relicEffectsOn()) tokenGain = Math.floor(tokenGain * (1 + relicActiveLevel('harvest') * 0.10));
-  return tokenGain > 0 ? tokenGain : 0;
+  let tokenGain = (finalScore / 5) * scaleMult;
+  if (relicEffectsOn()) tokenGain *= 1 + (HARVEST_BONUS[relicActiveLevel('harvest')] || 0);
+  return Math.max(0, Math.round(tokenGain));
 }
 function tryOpalRevive() {
   if (!relicEffectsOn() || localPlayEnabled || isOnlineMode()) return false;
@@ -8252,7 +8270,7 @@ function tryOpalRevive() {
   const lv = relicActiveLevel('magnet');
   if (lv < 1) return false;
   if (Math.random() >= (OPAL_CHANCE[lv] || 0)) return false;
-  const shield = lv >= 5 ? 2000 : lv >= 4 ? 1000 : 0;
+  const shield = lv >= 5 ? 1000 : 0;
   opalInvulnUntil = shield > 0 ? now + shield : 0;
   rogueHitFlashUntil = now + 220;
   if (points[0]) {
@@ -8366,15 +8384,16 @@ function relicNum(n) {
   return s.replace(/(\.\d)0$/, '$1').replace(/\.00$/, '');
 }
 function relicStatAt(id, lv) {
-  if (id === 'echo') return '콤보 +' + [0, 0.1, 0.2, 0.3, 0.4, 0.5][lv] + '초';
-  if (id === 'harvest') return '토큰 +' + (lv * 10) + '%';
-  if (id === 'cling') return ['', '8% · 2번', '10% · 2번', '12% · 2번', '14% · 3번', '16% · 3번'][lv];
-  if (id === 'calm') return '범위 +' + (lv * 3) + '%';
-  if (id === 'chase') return '시작 ' + (lv * 5) + '점';
+  if (id === 'echo') return '콤보 +' + relicNum((ECHO_MS[lv] || 0) / 1000) + '초';
+  if (id === 'harvest') return '토큰 +' + Math.round((HARVEST_BONUS[lv] || 0) * 100) + '%';
+  if (id === 'cling') {
+    return ['', '5% · 2번', '7% · 2번', '9% · 2번', '11% · 2번', '11% · 3번', '13% · 3번', '15% · 3번'][lv] || '';
+  }
+  if (id === 'calm') return '범위 +' + Math.round((CALM_BONUS[lv] || 0) * 100) + '%';
+  if (id === 'chase') return '시작 ' + (CHASE_START[lv] || 0) + '점';
   if (id === 'magnet') {
-    const line = '부활 ' + [0, 4, 5.5, 7, 8.5, 10][lv] + '%';
-    if (lv >= 5) return line + ' · 무적 2초';
-    if (lv >= 4) return line + ' · 무적 1초';
+    const line = '부활 ' + relicNum((OPAL_CHANCE[lv] || 0) * 100) + '%';
+    if (lv >= 5) return line + ' · 무적 1초';
     return line;
   }
   return '';
