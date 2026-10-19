@@ -7,7 +7,8 @@ const ctx = canvas.getContext('2d');
 const FEATURES = {
   scales: true,     // 토큰 재화 표시/획득/사용
   customize: false, // 꾸미기 패널
-  gacha: false      // 뽑기(가챠) 패널
+  gacha: false,     // 뽑기(가챠) 패널
+  shop: true        // 상점(프로필 배경)
 };
 
 const IS_MOBILE = (
@@ -55,6 +56,27 @@ function applyMobileMenuScale() {
   const left = (vw - scaledW) / 2;
   const top = (vh - scaledH) / 2;
   m.style.setProperty('transform', `translate(${left}px, ${top}px) scale(${scale})`, 'important');
+}
+
+function applyMobileToastScale() {
+  const root = document.getElementById('achievement-toast-root');
+  if (!root) return;
+  if (!IS_MOBILE) {
+    root.style.transform = '';
+    root.style.right = '';
+    root.style.bottom = '';
+    return;
+  }
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const scale = Math.min(vw / MOBILE_VIRTUAL_W, vh / MOBILE_VIRTUAL_H);
+  const scaledW = MOBILE_VIRTUAL_W * scale;
+  const scaledH = MOBILE_VIRTUAL_H * scale;
+  const inset = 16 * scale;
+  root.style.transformOrigin = 'bottom right';
+  root.style.transform = 'scale(' + scale + ')';
+  root.style.right = ((vw - scaledW) / 2 + inset) + 'px';
+  root.style.bottom = ((vh - scaledH) / 2 + inset) + 'px';
 }
 
 function isMobilePortrait() {
@@ -250,6 +272,7 @@ function resize() {
     canvas.style.right = 'auto';
     canvas.style.bottom = 'auto';
     applyMobileMenuScale();
+    applyMobileToastScale();
     updatePortraitPrompt();
   } else {
     canvas.width = window.innerWidth;
@@ -3258,6 +3281,9 @@ function triggerGameOver(cause) {
     }
     return;
   }
+  if (gameOver) return;
+  gameOver = true;
+  paused = false;
   // 기록(최고점): 일반/하드/혼돈만 저장, 연습·로그라이크는 저장 안 함
   if (!tutorialMode && gameMode !== 'practice' && gameMode !== 'roguelike') {
     trySaveHighScore(score, gameMode);
@@ -3273,8 +3299,7 @@ function triggerGameOver(cause) {
     // 토큰: 5점당 1개. 하드/혼돈 1.5배. 연습·로그라이크·멀티는 주지 않음.
     if (gameMode !== 'multi') grantRunTokens(calcTokenGain(score, tokenPlayMs));
   }
-  gameOver = true;
-  paused = false;
+  if (!tutorialMode) grantProfileXp(profileXpForRun());
 }
 
 function triggerLocalWin(winner, reason) {
@@ -3476,7 +3501,9 @@ function showAchievementToastFromCardId(id) {
   const toast = card.cloneNode(true);
   toast.classList.add('achievement-toast');
   if (toast.classList.contains('achievement-hidden')) toast.classList.add('toast-hidden');
-  else toast.classList.add('toast-normal');
+  else if (toast.classList.contains('achievement-rare') || toast.getAttribute('data-achievement-rare') === 'true') {
+    toast.classList.add('toast-rare');
+  } else toast.classList.add('toast-normal');
   toast.setAttribute('role', 'status');
   toast.removeAttribute('tabindex');
 
@@ -3539,12 +3566,23 @@ function reorderAchievementCards() {
   const hidden = function (c) {
     return c.getAttribute('data-achievement-hidden') === 'true';
   };
+  const rare = function (c) {
+    return !hidden(c) && (
+      c.classList.contains('achievement-rare') ||
+      c.getAttribute('data-achievement-rare') === 'true'
+    );
+  };
+  const normal = function (c) {
+    return !hidden(c) && !rare(c);
+  };
   const done = function (c) {
     return c.classList.contains('achievement-done');
   };
   const ordered = []
-    .concat(cards.filter(function (c) { return !hidden(c) && done(c); }))
-    .concat(cards.filter(function (c) { return !hidden(c) && !done(c); }))
+    .concat(cards.filter(function (c) { return normal(c) && done(c); }))
+    .concat(cards.filter(function (c) { return normal(c) && !done(c); }))
+    .concat(cards.filter(function (c) { return rare(c) && done(c); }))
+    .concat(cards.filter(function (c) { return rare(c) && !done(c); }))
     .concat(cards.filter(function (c) { return hidden(c) && done(c); }))
     .concat(cards.filter(function (c) { return hidden(c) && !done(c); }));
   const frag = document.createDocumentFragment();
@@ -3586,6 +3624,7 @@ function unlockAchievement(id) {
   showAchievementToastFromCardId(id);
   reorderAchievementCards();
   updateAchievementsProgressUi();
+  renderProfile();
   return true;
 }
 
@@ -3656,9 +3695,49 @@ function checkAchievementsAfterRun(finalScore, maxCombo, comboBonusTotal) {
     if (gameMode === 'normal' && Number.isFinite(fs) && r44 === 44) unlockAchievement('devil_44');
     if (gameMode === 'hard' && Number.isFinite(fs) && r44 === 44) unlockAchievement('archdevil_44_hard');
   }
+  checkExtraAchievements();
 }
 
-const ROGUE_GOD_MS = 135000;
+function countOwnedShopBackgrounds() {
+  const st = loadProfile();
+  let n = 0;
+  for (let i = 0; i < PROFILE_SHOP_BG.length; i++) {
+    if (st.backgrounds.indexOf(PROFILE_SHOP_BG[i].id) !== -1) n += 1;
+  }
+  return n;
+}
+
+function hasAllRelicsOpen() {
+  for (let i = 0; i < RELIC_DEFS.length; i++) {
+    if (relicLevel(RELIC_DEFS[i].id) < 1) return false;
+  }
+  return RELIC_DEFS.length > 0;
+}
+
+function checkExtraAchievements() {
+  if (countOwnedShopBackgrounds() >= 5) unlockAchievement('collector_bg');
+  if (
+    typeof PROFILE_SHOP_BG !== 'undefined' &&
+    PROFILE_SHOP_BG.length > 0 &&
+    countOwnedShopBackgrounds() >= PROFILE_SHOP_BG.length
+  ) {
+    unlockAchievement('collector_plus');
+  }
+  if (
+    getHighScore('normal') >= 150 &&
+    getHighScore('hard') >= 150 &&
+    getHighScore('chaos') >= 150
+  ) {
+    unlockAchievement('transcend_150');
+  }
+  if (getScales() >= 1000) unlockAchievement('hidden_token_1000');
+  if (getScalesSpent() >= 3000) unlockAchievement('golden_age');
+  try {
+    if (typeof RELIC_DEFS !== 'undefined' && hasAllRelicsOpen()) unlockAchievement('gem_jeweler');
+  } catch (_) {}
+}
+
+const ROGUE_GOD_MS = 140000;
 const ROGUE_LV2_ONLY_MS = 75000;
 
 function countRogueAugmentsAtLevel(level) {
@@ -4771,7 +4850,7 @@ function animate() {
               break;
             }
             if (tryOpalRevive()) {
-              if (!(opalInvulnUntil > performance.now())) opalClearObstacle(obs);
+              if (!(opalInvulnUntil > performance.now()) && !obs.fadeOut) obs.fadeOut = OBS_FADE_FRAMES;
             } else if (localPlayEnabled) triggerLocalDeath('white');
             else triggerGameOver();
             hitFound = true;
@@ -5899,9 +5978,7 @@ const tutorialClose = document.getElementById('tutorial-close');
 const achievementsWrap = document.getElementById('achievements-wrap');
 const achievementsToggle = document.getElementById('achievements-toggle');
 const achievementsPanel = document.getElementById('achievements-panel');
-const menuInfoToggle = document.getElementById('menu-info-toggle');
 const menuInfoPanel = document.getElementById('menu-info-panel');
-const menuInfoWrap = document.getElementById('menu-info-wrap');
 const menuInfoClose = document.getElementById('menu-info-close');
 const menuInfoTabInfo = document.getElementById('menu-info-tab-info');
 const menuInfoTabPatchnotes = document.getElementById('menu-info-tab-patchnotes');
@@ -6380,15 +6457,12 @@ function cycleGameModeFromTitleClick() {
   updatePracticePanelVisibility();
 }
 
-// ===== 메뉴 허브 (업적 / 보석 / 퀘스트 / 뽑기 2x2) =====
+// ===== 메뉴 허브 (정보 / 업적 / 보석 / 상점 2x2) =====
 const menuHubWrap = document.getElementById('menu-hub-wrap');
 const menuHubToggle = document.getElementById('menu-hub-toggle');
 const menuHubPanel = document.getElementById('menu-hub-panel');
 const menuCustomizePanel = document.getElementById('menu-customize-panel');
-const menuQuestPanel = document.getElementById('menu-quest-panel');
-
-// 상세정보는 좌상단으로 분리(허브 아님). 뽑기가 허브 그리드에 들어옴.
-const menuGachaPanel = document.getElementById('menu-gacha-panel');
+const menuShopPanel = document.getElementById('menu-shop-panel');
 
 // 모바일: 패널도 menu-screen과 함께 스케일(PC 카드 UI 비율 유지)
 // (고정 배치로 빼면 가로/세로 비율이 깨져 'ㅡ'처럼 납작해질 수 있음)
@@ -6397,13 +6471,14 @@ const hubPanels = {
   grid: menuHubPanel,
   achievements: achievementsPanel,
   gems: menuCustomizePanel,
-  quest: menuQuestPanel,
-  gacha: menuGachaPanel
+  shop: menuShopPanel,
+  info: menuInfoPanel
 };
 let hubView = null;
 function setHubView(view) {
   hubView = view;
   if (view === 'gems') renderRelicPanel();
+  if (view === 'shop') renderShop();
   for (const key in hubPanels) {
     const p = hubPanels[key];
     if (!p) continue;
@@ -6423,7 +6498,6 @@ if (menuHubToggle) {
   menuHubToggle.addEventListener('click', e => {
     e.stopPropagation();
     playMenuUiSound('soft');
-    setMenuInfoOpen(false); // 상세정보 열려있으면 닫기
     setHubView(hubView === null ? 'grid' : null);
   });
 }
@@ -6433,7 +6507,12 @@ if (menuHubPanel) {
       e.stopPropagation();
       const hub = btn.getAttribute('data-hub');
       if (hub === 'gacha' && !FEATURES.gacha) return;
+      if (hub === 'shop' && !FEATURES.shop) return;
       playMenuUiSound('primary');
+      if (hub === 'info') {
+        setMenuInfoTab('info');
+        resetMenuInfoAccordions();
+      }
       setHubView(hub);
     });
   });
@@ -6449,30 +6528,22 @@ document.querySelectorAll('[data-hub-back]').forEach(btn => {
 
 // ===== 상세정보(좌상단, 허브와 별개) =====
 function setMenuInfoOpen(open) {
-  if (!menuInfoPanel || !menuInfoToggle) return;
+  if (!menuInfoPanel) return;
   menuInfoPanel.classList.toggle('is-open', open);
-  menuInfoToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-  menuInfoToggle.setAttribute('aria-label', open ? '상세정보 닫기' : '상세정보 열기');
   menuInfoPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
-}
-if (menuInfoToggle && menuInfoPanel) {
-  menuInfoToggle.addEventListener('click', e => {
-    e.stopPropagation();
-    playMenuUiSound('soft');
-    const next = !menuInfoPanel.classList.contains('is-open');
-    setHubView(null); // 허브 열려있으면 닫기
-    if (next) {
-      setMenuInfoTab('info');
-      resetMenuInfoAccordions();
+  if (!open && hubView === 'info') {
+    hubView = null;
+    if (menuHubToggle) {
+      menuHubToggle.setAttribute('aria-expanded', 'false');
+      menuHubToggle.setAttribute('aria-label', '메뉴 열기');
     }
-    setMenuInfoOpen(next);
-  });
+  }
 }
 if (menuInfoClose) {
   menuInfoClose.addEventListener('click', e => {
     e.stopPropagation();
     playMenuUiSound('soft');
-    setMenuInfoOpen(false);
+    setHubView(null);
   });
 }
 [[menuInfoTabInfo, 'info'], [menuInfoTabPatchnotes, 'patchnotes']].forEach(([tab, id]) => {
@@ -6507,14 +6578,6 @@ document.addEventListener('click', e => {
   if (!inStartUi && menuStartStage === 'choose') {
     closeMenuStartToStart();
   }
-  // 상세정보(좌상단) 바깥 클릭 시 닫기
-  if (menuInfoPanel && menuInfoPanel.classList.contains('is-open')) {
-    const inInfo = (menuInfoWrap && menuInfoWrap.contains(e.target)) || menuInfoPanel.contains(e.target);
-    if (!inInfo) {
-      playMenuUiSound('soft');
-      setMenuInfoOpen(false);
-    }
-  }
   // 허브 바깥 클릭 시 닫기
   if (!isHubOpen()) return;
   const inHub =
@@ -6530,6 +6593,7 @@ document.addEventListener('click', e => {
 // 토큰(재화) & 꾸미기(뱀 머리 장신구)
 // ============================================================
 const SCALES_KEY = 'snakombo_scales_v1';
+const SCALES_SPENT_KEY = 'snakombo_scales_spent_v1';
 function getScales() {
   if (!FEATURES.scales) return 0;
   try {
@@ -6537,12 +6601,34 @@ function getScales() {
     return Number.isFinite(v) && v >= 0 ? v : 0;
   } catch (_) { return 0; }
 }
+function getScalesSpent() {
+  if (!FEATURES.scales) return 0;
+  try {
+    const v = parseInt(localStorage.getItem(SCALES_SPENT_KEY), 10);
+    return Number.isFinite(v) && v >= 0 ? v : 0;
+  } catch (_) { return 0; }
+}
+function addScalesSpent(n) {
+  if (!FEATURES.scales) return 0;
+  n = Math.floor(n);
+  if (!(n > 0)) return getScalesSpent();
+  const next = getScalesSpent() + n;
+  try { localStorage.setItem(SCALES_SPENT_KEY, String(next)); } catch (_) {}
+  if (next >= 3000) {
+    try { unlockAchievement('golden_age'); } catch (_) {}
+  }
+  return next;
+}
 function setScales(n) {
   if (!FEATURES.scales) return 0;
   const t = Math.max(0, Math.floor(n) || 0);
   try { localStorage.setItem(SCALES_KEY, String(t)); } catch (_) {}
   updateScalesUI();
   try { updateGachaUI(); } catch (_) {}
+  try { if (hubView === 'shop') renderShop(); } catch (_) {}
+  if (t >= 1000) {
+    try { unlockAchievement('hidden_token_1000'); } catch (_) {}
+  }
   return t;
 }
 function addScales(n) {
@@ -6550,6 +6636,16 @@ function addScales(n) {
   n = Math.floor(n);
   if (!(n > 0)) return getScales();
   return setScales(getScales() + n);
+}
+function spendScales(n) {
+  if (!FEATURES.scales) return 0;
+  n = Math.floor(n);
+  if (!(n > 0)) return getScales();
+  const have = getScales();
+  const pay = Math.min(have, n);
+  const next = setScales(have - pay);
+  if (pay > 0) addScalesSpent(pay);
+  return next;
 }
 let tokenFlyPending = 0;
 let tokenFlyShown = null;
@@ -6684,6 +6780,839 @@ function updateScalesUI() {
     wrap.style.display = FEATURES.scales ? '' : 'none';
   }
   if (typeof renderRelicPanel === 'function') renderRelicPanel();
+}
+
+// ============================================================
+// 프로필 (이름, 레벨, 칭호, 보여주는 업적·기록)
+// ============================================================
+const PROFILE_KEY = 'snakombo_profile_v1';
+const PROFILE_MAX_LEVEL = 80;
+const PROFILE_NAME_MAX = 10;
+const PROFILE_NAME_COST = 50;
+const PROFILE_TITLES = [
+  { level: 10, id: 't10', name: '신입' },
+  { level: 20, id: 't20', name: '단골' },
+  { level: 30, id: 't30', name: '숙련' },
+  { level: 40, id: 't40', name: '고수' },
+  { level: 50, id: 't50', name: '달인' },
+  { level: 60, id: 't60', name: '명인' },
+  { level: 70, id: 't70', name: '전설' },
+  { level: 80, id: 't80', name: '스네이콤보' }
+];
+const PROFILE_LEVEL_BG_IDS = ['bg10', 'bg20', 'bg30', 'bg50', 'bg60', 'bg70', 'bg80'];
+const PROFILE_BG_NAME = {
+  bg10: '물방울',
+  bg20: '네온',
+  bg30: '눈',
+  bg50: '균열',
+  bg60: '노이즈',
+  bg70: '금박',
+  bg80: '일식'
+};
+const PROFILE_SHOP_BG_PRICE = 125;
+const PROFILE_SHOP_BG = [
+  { id: 'shop-stars', name: '별무더기', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-fog', name: '안개 숲', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-ink', name: '먹물', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-wheat', name: '밀밭', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-map', name: '옛 지도', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-silk', name: '비단', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-shore', name: '검은 모래', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-glass', name: '온실', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-nebula', name: '성운', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-deep', name: '심해', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-sunset', name: '노을', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-cave', name: '동굴', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-moon', name: '달 표면', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-aurora', name: '오로라', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-blossom', name: '벚꽃', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-meteor', name: '유성', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-void', name: '공허', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-light', name: '등대', price: PROFILE_SHOP_BG_PRICE }
+];
+PROFILE_SHOP_BG.forEach(function (item) {
+  PROFILE_BG_NAME[item.id] = item.name;
+});
+const PROFILE_BG_IDS = PROFILE_LEVEL_BG_IDS.concat(PROFILE_SHOP_BG.map(function (item) { return item.id; }));
+const PROFILE_RECORD_MODES = [
+  { id: 'normal', label: '일반' },
+  { id: 'hard', label: '하드' },
+  { id: 'chaos', label: '혼돈' },
+  { id: 'roguelike', label: '로그라이크' }
+];
+
+function profileCost(level) {
+  return 100 + (level - 1) * 20;
+}
+
+function profileXpCap() {
+  let sum = 0;
+  for (let lv = 1; lv < PROFILE_MAX_LEVEL; lv++) sum += profileCost(lv);
+  return sum;
+}
+
+function roundProfileXp(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return 0;
+  return Math.round(v * 100) / 100;
+}
+
+function profileProgress(xp) {
+  let level = 1;
+  let remain = Math.max(0, Number(xp) || 0);
+  while (level < PROFILE_MAX_LEVEL) {
+    const cost = profileCost(level);
+    if (remain < cost) return { level: level, into: remain, need: cost, maxed: false };
+    remain -= cost;
+    level += 1;
+  }
+  const last = profileCost(PROFILE_MAX_LEVEL - 1);
+  return { level: PROFILE_MAX_LEVEL, into: last, need: last, maxed: true };
+}
+
+function defaultProfile() {
+  return { name: '', xp: 0, achievements: [], records: [], title: '', claimed: [], backgrounds: [], bg: '' };
+}
+
+function loadProfile() {
+  const base = defaultProfile();
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    const obj = raw ? JSON.parse(raw) : null;
+    if (obj && typeof obj === 'object') {
+    if (typeof obj.name === 'string') base.name = obj.name.slice(0, PROFILE_NAME_MAX);
+    const xp = Number(obj.xp);
+    if (Number.isFinite(xp) && xp > 0) base.xp = xp;
+    if (Array.isArray(obj.achievements)) {
+      base.achievements = obj.achievements.filter(function (id) { return typeof id === 'string'; }).slice(0, 3);
+    }
+    if (Array.isArray(obj.records)) {
+      base.records = obj.records.filter(function (id) {
+        return id === 'normal' || id === 'hard' || id === 'chaos' || id === 'roguelike';
+      }).slice(0, 2);
+    }
+    if (typeof obj.title === 'string') base.title = obj.title;
+    if (Array.isArray(obj.backgrounds)) {
+      base.backgrounds = obj.backgrounds.filter(function (id) { return typeof id === 'string'; });
+    }
+    if (typeof obj.bg === 'string') base.bg = obj.bg;
+    if (Array.isArray(obj.claimed)) {
+      base.claimed = obj.claimed.filter(function (n) {
+        return n >= 1 && n <= PROFILE_MAX_LEVEL;
+      });
+    } else if (base.xp > 0) {
+      const reached = profileProgress(base.xp).level;
+      for (let lv = 2; lv <= reached; lv++) base.claimed.push(lv);
+    }
+    }
+  } catch (_) {}
+  if (relockProfileBackgrounds(base)) saveProfile(base);
+  else if (base.bg && base.backgrounds.indexOf(base.bg) === -1) {
+    base.bg = '';
+    saveProfile(base);
+  }
+  return base;
+}
+
+const PROFILE_BG_RELOCK_KEY = 'snakombo_profile_bg_relock_v1';
+
+function relockProfileBackgrounds(st) {
+  try {
+    if (localStorage.getItem(PROFILE_BG_RELOCK_KEY) === '1') return false;
+  } catch (_) {}
+  const allowed = [];
+  st.claimed.forEach(function (lv) {
+    const reward = profileRewardForLevel(lv);
+    if (reward.background && allowed.indexOf(reward.background) === -1) {
+      allowed.push(reward.background);
+    }
+  });
+  st.backgrounds = allowed;
+  if (st.bg && allowed.indexOf(st.bg) === -1) st.bg = '';
+  try { localStorage.setItem(PROFILE_BG_RELOCK_KEY, '1'); } catch (_) {}
+  return true;
+}
+
+function saveProfile(st) {
+  try { localStorage.setItem(PROFILE_KEY, JSON.stringify(st)); } catch (_) {}
+}
+
+function profileDisplayName(st) {
+  const n = String(st.name || '').trim();
+  return n || '플레이어';
+}
+
+function profileHasName() {
+  return !!String(loadProfile().name || '').trim();
+}
+
+function profileTitleById(id) {
+  for (let i = 0; i < PROFILE_TITLES.length; i++) {
+    if (PROFILE_TITLES[i].id === id) return PROFILE_TITLES[i];
+  }
+  return null;
+}
+
+function profileUnlockedTitles(level) {
+  return PROFILE_TITLES.filter(function (t) { return level >= t.level; });
+}
+
+function profileRewardForLevel(level) {
+  if (level === 40) return { tokens: 0, background: '', achievement: 'level_half' };
+  if (level === 10) return { tokens: 0, background: 'bg10', achievement: '' };
+  if (level === 20) return { tokens: 0, background: 'bg20', achievement: '' };
+  if (level === 30) return { tokens: 0, background: 'bg30', achievement: '' };
+  if (level === 50) return { tokens: 0, background: 'bg50', achievement: '' };
+  if (level === 60) return { tokens: 0, background: 'bg60', achievement: '' };
+  if (level === 70) return { tokens: 0, background: 'bg70', achievement: '' };
+  if (level === 80) return { tokens: 0, background: 'bg80', achievement: 'level_max' };
+  if (level % 5 === 0) return { tokens: 50, background: '', achievement: '' };
+  return { tokens: 20, background: '', achievement: '' };
+}
+
+function profileBgName(id) {
+  return PROFILE_BG_NAME[id] || id;
+}
+
+function profileRewardLines(reward) {
+  const parts = [];
+  if (reward.tokens > 0) parts.push('토큰 ' + reward.tokens);
+  if (reward.background) parts.push('프로필 배경:' + profileBgName(reward.background));
+  if (reward.achievement === 'level_half') parts.push('시작이 반이다..? 업적');
+  if (reward.achievement === 'level_max') parts.push('10000렙! 업적');
+  return parts;
+}
+
+function profileRewardText(reward) {
+  return profileRewardLines(reward).join(' · ');
+}
+
+function profileXpForRun() {
+  if (!(tokenPlayMs >= 10000)) return 0;
+  if (tutorialMode || gameMode === 'practice' || gameMode === 'multi') return 0;
+  if (gameMode === 'roguelike') return roundProfileXp((rogueRunMs / 1000) * 1.5);
+  const pts = Number(score);
+  if (!Number.isFinite(pts) || pts <= 0) return 0;
+  if (gameMode === 'hard' || gameMode === 'chaos') return roundProfileXp(pts * 2);
+  if (gameMode === 'normal') return roundProfileXp(pts);
+  return 0;
+}
+
+function showProfileLevelToast(level, tokens, titleName) {
+  const root = document.getElementById('achievement-toast-root');
+  if (!root) return;
+  const toast = document.createElement('div');
+  toast.className = 'achievement-card achievement-toast toast-normal';
+  toast.setAttribute('role', 'status');
+  const row = document.createElement('div');
+  row.className = 'achievement-title-row';
+  const title = document.createElement('span');
+  title.className = 'achievement-title';
+  title.textContent = level >= PROFILE_MAX_LEVEL ? 'Lv.MAX' : ('Lv.' + level);
+  const kind = document.createElement('span');
+  kind.className = 'achievement-kind';
+  kind.textContent = '레벨 보상';
+  const desc = document.createElement('p');
+  desc.className = 'achievement-desc';
+  desc.textContent = tokens > 0
+    ? (titleName ? ('토큰 ' + tokens + ' · ' + titleName) : ('토큰 ' + tokens))
+    : (titleName || '보상을 받을 수 있습니다');
+  row.appendChild(title);
+  row.appendChild(kind);
+  toast.appendChild(row);
+  toast.appendChild(desc);
+  root.appendChild(toast);
+  setTimeout(function () {
+    if (toast.parentNode) toast.parentNode.removeChild(toast);
+  }, 2600);
+}
+
+function grantProfileXp(amount) {
+  amount = roundProfileXp(amount);
+  if (!(amount > 0)) return;
+  const st = loadProfile();
+  const cap = profileXpCap();
+  if (st.xp >= cap) return;
+  st.xp = Math.min(cap, roundProfileXp(st.xp + amount));
+  saveProfile(st);
+  renderProfile();
+}
+
+function claimProfileReward(level) {
+  const st = loadProfile();
+  const prog = profileProgress(st.xp);
+  if (level < 1 || level > prog.level) return;
+  if (st.claimed.indexOf(level) !== -1) return;
+  const reward = profileRewardForLevel(level);
+  st.claimed.push(level);
+  if (reward.background) {
+    if (st.backgrounds.indexOf(reward.background) === -1) st.backgrounds.push(reward.background);
+    if (!st.bg) st.bg = reward.background;
+  }
+  saveProfile(st);
+  if (reward.tokens > 0) {
+    grantRunTokens(reward.tokens);
+    playTokenFly();
+  }
+  if (reward.achievement) unlockAchievement(reward.achievement);
+  playMenuUiSound('primary');
+  if (!(reward.tokens > 0) && !reward.achievement) showProfileLevelToast(level, 0, profileRewardText(reward));
+  renderProfile();
+  if (profilePane === 'rewards') renderProfileRewards();
+}
+
+function profileAchievementChoices() {
+  const unlocked = new Set(getAchievementsUnlockedList());
+  const cards = document.querySelectorAll('#achievements-panel .achievement-card');
+  const out = [];
+  cards.forEach(function (card) {
+    const id = card.getAttribute('data-achievement-id');
+    if (!id || !unlocked.has(id)) return;
+    const titleEl = card.querySelector('.achievement-title');
+    const hidden = card.getAttribute('data-achievement-hidden') === 'true';
+    const rare = card.classList.contains('achievement-rare') ||
+      card.getAttribute('data-achievement-rare') === 'true';
+    const descEl = card.querySelector('.achievement-desc');
+    const reveal = card.getAttribute('data-reveal-desc');
+    out.push({
+      id: id,
+      name: titleEl ? titleEl.textContent : id,
+      hidden: hidden,
+      rare: rare,
+      desc: hidden ? (reveal || '') : (descEl ? descEl.textContent : '')
+    });
+  });
+  return out;
+}
+
+const PROFILE_BG_URL = {
+  bg10: 'assets/profile/bg10.png',
+  bg20: 'assets/profile/bg20.png',
+  bg30: 'assets/profile/bg30.png',
+  bg50: 'assets/profile/bg50.png',
+  bg60: 'assets/profile/bg60.png',
+  bg70: 'assets/profile/bg70.png',
+  bg80: 'assets/profile/bg80.png',
+  'shop-nebula': 'assets/profile/shop-nebula.png',
+  'shop-stars': 'assets/profile/shop-stars.png',
+  'shop-void': 'assets/profile/shop-void.png',
+  'shop-meteor': 'assets/profile/shop-meteor.png',
+  'shop-deep': 'assets/profile/shop-deep.png',
+  'shop-aurora': 'assets/profile/shop-aurora.png',
+  'shop-fog': 'assets/profile/shop-fog.png',
+  'shop-sunset': 'assets/profile/shop-sunset.png',
+  'shop-moon': 'assets/profile/shop-moon.png',
+  'shop-ink': 'assets/profile/shop-ink.png',
+  'shop-silk': 'assets/profile/shop-silk.png',
+  'shop-light': 'assets/profile/shop-light.png',
+  'shop-wheat': 'assets/profile/shop-wheat.png',
+  'shop-shore': 'assets/profile/shop-shore.png',
+  'shop-glass': 'assets/profile/shop-glass.png',
+  'shop-cave': 'assets/profile/shop-cave.png',
+  'shop-blossom': 'assets/profile/shop-blossom.png',
+  'shop-map': 'assets/profile/shop-map.png'
+};
+
+function applyProfileBackground(st) {
+  const slot = document.getElementById('profile-slot');
+  if (!slot) return;
+  const url = PROFILE_BG_URL[st.bg];
+  if (url) {
+    slot.classList.add('has-bg');
+    slot.style.setProperty('--profile-bg', 'url("' + url + '")');
+  } else {
+    slot.classList.remove('has-bg');
+    slot.style.removeProperty('--profile-bg');
+  }
+}
+
+function renderProfile() {
+  const st = loadProfile();
+  applyProfileBackground(st);
+  const prog = profileProgress(st.xp);
+  const nameEl = document.getElementById('profile-name');
+  const levelEl = document.getElementById('profile-level');
+  if (nameEl) nameEl.textContent = profileDisplayName(st);
+  if (levelEl) levelEl.textContent = profileLevelText(prog);
+  const input = document.getElementById('profile-name-input');
+  if (input && document.activeElement !== input) input.value = st.name;
+  renderProfileView(st, prog);
+  renderProfileBackgrounds(st);
+  renderProfileTitles(st, prog.level);
+  renderProfileAchievements(st);
+  renderProfileRecords(st);
+  syncProfileNameConfirm();
+}
+
+function profileAchievementTip(meta) {
+  if (!meta) return '';
+  const viewerHas = getAchievementsUnlockedList().indexOf(meta.id) !== -1;
+  if (meta.hidden && !viewerHas) return '???';
+  return meta.desc || '';
+}
+
+function markProfileAchievement(el, meta) {
+  el.classList.add(meta.hidden ? 'is-hidden' : (meta.rare ? 'is-rare' : 'is-normal'));
+  const tip = profileAchievementTip(meta);
+  if (tip) el.setAttribute('data-ach-tip', tip);
+}
+
+function profileLevelText(prog) {
+  return prog.maxed ? 'Lv.MAX' : ('Lv.' + prog.level);
+}
+
+function profileXpText(prog) {
+  return formatScoreForMenu(prog.into) + ' / ' + prog.need;
+}
+
+function profileRecordText(mode) {
+  if (mode.id === 'roguelike') return Math.floor(getRogueBestMs() / 1000) + '초';
+  return formatScoreForMenu(getHighScore(mode.id)) + '점';
+}
+
+function markProfileRecord(el, mode) {
+  el.classList.add('is-mode-' + mode.id);
+}
+
+function profileEquippedTitle(st, level) {
+  const equipped = profileTitleById(st.title);
+  const owned = profileUnlockedTitles(level).some(function (t) { return t.id === st.title; });
+  return equipped && owned ? equipped.name : '';
+}
+
+function appendProfileEmpty(root, text) {
+  const p = document.createElement('p');
+  p.className = 'profile-empty';
+  p.textContent = text;
+  root.appendChild(p);
+}
+
+function renderProfileView(st, prog) {
+  const nameEl = document.getElementById('profile-view-name');
+  if (nameEl) nameEl.textContent = profileDisplayName(st);
+  const levelEl = document.getElementById('profile-view-level');
+  if (levelEl) levelEl.textContent = profileLevelText(prog);
+  const titleEl = document.getElementById('profile-view-title');
+  if (titleEl) titleEl.textContent = profileEquippedTitle(st, prog.level);
+  const xpEl = document.getElementById('profile-view-xp');
+  if (xpEl) xpEl.textContent = profileXpText(prog);
+  const viewFill = document.getElementById('profile-view-xp-fill');
+  if (viewFill) {
+    const pct = prog.need > 0 ? Math.max(0, Math.min(1, prog.into / prog.need)) : 1;
+    viewFill.style.width = (prog.maxed ? 100 : pct * 100) + '%';
+  }
+  const achRoot = document.getElementById('profile-view-achievements');
+  if (achRoot) {
+    const choices = profileAchievementChoices();
+    const picked = [];
+    st.achievements.forEach(function (id) {
+      for (let i = 0; i < choices.length; i++) {
+        if (choices[i].id === id) picked.push(choices[i]);
+      }
+    });
+    achRoot.textContent = '';
+    if (!picked.length) appendProfileEmpty(achRoot, '공개하지 않음');
+    else picked.forEach(function (c) {
+      const row = document.createElement('div');
+      row.className = 'profile-line';
+      row.textContent = c.name;
+      markProfileAchievement(row, c);
+      achRoot.appendChild(row);
+    });
+  }
+  const recRoot = document.getElementById('profile-view-records');
+  if (recRoot) {
+    recRoot.textContent = '';
+    const modes = PROFILE_RECORD_MODES.filter(function (mode) {
+      return st.records.indexOf(mode.id) !== -1;
+    });
+    if (!modes.length) appendProfileEmpty(recRoot, '공개하지 않음');
+    else modes.forEach(function (mode) {
+      const row = document.createElement('div');
+      row.className = 'profile-line';
+      markProfileRecord(row, mode);
+      const label = document.createElement('span');
+      label.textContent = mode.label;
+      const scoreEl = document.createElement('span');
+      scoreEl.className = 'profile-choice-score';
+      scoreEl.textContent = profileRecordText(mode);
+      row.appendChild(label);
+      row.appendChild(scoreEl);
+      recRoot.appendChild(row);
+    });
+  }
+}
+
+function renderProfileTitles(st, level) {
+  const root = document.getElementById('profile-titles');
+  if (!root) return;
+  const titles = profileUnlockedTitles(level);
+  root.textContent = '';
+  if (!titles.length) {
+    const p = document.createElement('p');
+    p.className = 'profile-empty';
+    p.textContent = '10레벨마다 칭호를 받습니다';
+    root.appendChild(p);
+    return;
+  }
+  titles.forEach(function (t) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'profile-choice' + (st.title === t.id ? ' is-on' : '');
+    btn.textContent = t.name;
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      const cur = loadProfile();
+      cur.title = cur.title === t.id ? '' : t.id;
+      saveProfile(cur);
+      playMenuUiSound('soft');
+      renderProfile();
+    });
+    root.appendChild(btn);
+  });
+}
+
+function renderProfileBackgrounds(st) {
+  const root = document.getElementById('profile-backgrounds');
+  if (!root) return;
+  root.textContent = '';
+  const plain = document.createElement('button');
+  plain.type = 'button';
+  plain.className = 'profile-bg-choice is-plain' + (st.bg ? '' : ' is-on');
+  plain.textContent = '기본';
+  plain.addEventListener('click', function (e) {
+    e.stopPropagation();
+    const cur = loadProfile();
+    cur.bg = '';
+    saveProfile(cur);
+    playMenuUiSound('soft');
+    renderProfile();
+  });
+  root.appendChild(plain);
+  PROFILE_BG_IDS.forEach(function (id) {
+    if (st.backgrounds.indexOf(id) === -1 || !PROFILE_BG_URL[id]) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'profile-bg-choice' + (st.bg === id ? ' is-on' : '');
+    btn.style.backgroundImage = 'url("' + PROFILE_BG_URL[id] + '")';
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      const cur = loadProfile();
+      cur.bg = id;
+      saveProfile(cur);
+      playMenuUiSound('soft');
+      renderProfile();
+    });
+    root.appendChild(btn);
+  });
+}
+
+function renderProfileAchievements(st) {
+  const root = document.getElementById('profile-achievements');
+  if (!root) return;
+  const choices = profileAchievementChoices();
+  const picked = st.achievements.filter(function (id) {
+    return choices.some(function (c) { return c.id === id; });
+  });
+  root.textContent = '';
+  if (!choices.length) {
+    const p = document.createElement('p');
+    p.className = 'profile-empty';
+    p.textContent = '아직 달성한 업적이 없습니다';
+    root.appendChild(p);
+    return;
+  }
+  choices.forEach(function (c) {
+    const on = picked.indexOf(c.id) !== -1;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'profile-choice' + (on ? ' is-on' : '');
+    btn.textContent = c.name;
+    markProfileAchievement(btn, c);
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      const cur = loadProfile();
+      const have = profileAchievementChoices();
+      cur.achievements = cur.achievements.filter(function (id) {
+        return have.some(function (h) { return h.id === id; });
+      });
+      const idx = cur.achievements.indexOf(c.id);
+      if (idx !== -1) cur.achievements.splice(idx, 1);
+      else if (cur.achievements.length < 3) cur.achievements.push(c.id);
+      saveProfile(cur);
+      playMenuUiSound('soft');
+      renderProfile();
+    });
+    root.appendChild(btn);
+  });
+}
+
+function renderProfileRecords(st) {
+  const root = document.getElementById('profile-records');
+  if (!root) return;
+  root.textContent = '';
+  PROFILE_RECORD_MODES.forEach(function (mode) {
+    const on = st.records.indexOf(mode.id) !== -1;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'profile-choice' + (on ? ' is-on' : '');
+    markProfileRecord(btn, mode);
+    const label = document.createElement('span');
+    label.textContent = mode.label;
+    const scoreEl = document.createElement('span');
+    scoreEl.className = 'profile-choice-score';
+    scoreEl.textContent = profileRecordText(mode);
+    btn.appendChild(label);
+    btn.appendChild(scoreEl);
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      const cur = loadProfile();
+      const idx = cur.records.indexOf(mode.id);
+      if (idx !== -1) cur.records.splice(idx, 1);
+      else if (cur.records.length < 2) cur.records.push(mode.id);
+      saveProfile(cur);
+      playMenuUiSound('soft');
+      renderProfile();
+    });
+    root.appendChild(btn);
+  });
+}
+
+let profileEditing = false;
+let profilePane = 'view';
+
+function isProfileOpen() {
+  const panel = document.getElementById('profile-panel');
+  return !!(panel && panel.classList.contains('is-open'));
+}
+
+function renderProfileRewards() {
+  const root = document.getElementById('profile-reward-list');
+  if (!root) return;
+  const st = loadProfile();
+  const prog = profileProgress(st.xp);
+  root.textContent = '';
+  let focusEl = null;
+  for (let lv = 1; lv <= PROFILE_MAX_LEVEL; lv++) {
+    const reward = profileRewardForLevel(lv);
+    const reached = lv <= prog.level;
+    const claimed = st.claimed.indexOf(lv) !== -1;
+    const box = document.createElement('button');
+    box.type = 'button';
+    box.className = 'profile-reward';
+    if (lv % 5 === 0) box.classList.add('is-mile');
+    if (!reached) box.classList.add('is-locked');
+    else if (claimed) box.classList.add('is-claimed');
+    else {
+      box.classList.add('is-ready');
+      if (!focusEl) focusEl = box;
+    }
+    box.setAttribute('aria-disabled', box.classList.contains('is-ready') ? 'false' : 'true');
+    const name = document.createElement('span');
+    name.className = 'profile-reward-lv';
+    name.textContent = lv >= PROFILE_MAX_LEVEL ? 'Lv.MAX' : ('Lv.' + lv);
+    const side = document.createElement('span');
+    side.className = 'profile-reward-side';
+    if (!(claimed && reward.tokens > 0)) {
+      const pay = document.createElement('span');
+      pay.className = 'profile-reward-pay';
+      const lines = profileRewardLines(reward);
+      if (lines.length > 1) {
+        pay.classList.add('is-multi');
+        pay.textContent = lines.join('\n');
+      } else {
+        pay.textContent = lines[0] || '';
+      }
+      side.appendChild(pay);
+    }
+    if (claimed) {
+      const mark = document.createElement('span');
+      mark.className = 'profile-reward-mark';
+      mark.textContent = '받음';
+      side.appendChild(mark);
+    }
+    if (reward.background && PROFILE_BG_URL[reward.background]) {
+      box.setAttribute('data-bg-tip', PROFILE_BG_URL[reward.background]);
+    }
+    box.appendChild(name);
+    box.appendChild(side);
+    box.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (!box.classList.contains('is-ready')) return;
+      claimProfileReward(lv);
+    });
+    root.appendChild(box);
+  }
+  if (!focusEl) return;
+  const scroller = root.closest('.profile-panel-body');
+  if (!scroller) return;
+  const rowTop = focusEl.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+  scroller.scrollTop = Math.max(0, rowTop - scroller.clientHeight / 2);
+}
+
+function setProfilePane(pane) {
+  profilePane = pane === 'edit' || pane === 'rewards' ? pane : 'view';
+  profileEditing = profilePane === 'edit';
+  const panel = document.getElementById('profile-panel');
+  if (panel) {
+    panel.classList.toggle('is-editing', profilePane === 'edit');
+    panel.classList.toggle('is-rewards', profilePane === 'rewards');
+  }
+  const title = document.getElementById('profile-panel-title');
+  if (title) {
+    title.textContent = profilePane === 'edit' ? '설정' : (profilePane === 'rewards' ? '레벨 보상' : '프로필');
+  }
+  const btn = document.getElementById('profile-settings');
+  const icon = document.getElementById('profile-settings-icon');
+  if (btn) btn.setAttribute('aria-label', profilePane === 'view' ? '설정' : '프로필 보기');
+  if (icon) {
+    icon.src = profilePane === 'view'
+      ? 'https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/settings.svg'
+      : 'https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/arrow-left.svg';
+  }
+  if (profilePane === 'rewards') renderProfileRewards();
+  else if (profilePane === 'view') renderProfile();
+}
+
+function setProfileEditing(on) {
+  setProfilePane(on ? 'edit' : 'view');
+}
+
+function setProfileOpen(open) {
+  const panel = document.getElementById('profile-panel');
+  const slot = document.getElementById('profile-slot');
+  if (!panel) return;
+  panel.classList.toggle('is-open', !!open);
+  panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+  if (slot) slot.setAttribute('aria-expanded', open ? 'true' : 'false');
+  setProfileEditing(false);
+}
+
+function bindProfilePanel() {
+  const slot = document.getElementById('profile-slot');
+  const closeBtn = document.getElementById('profile-close');
+  const input = document.getElementById('profile-name-input');
+  if (slot) {
+    slot.addEventListener('click', function () {
+      playMenuUiSound('soft');
+      setProfileOpen(!isProfileOpen());
+    });
+  }
+  const settingsBtn = document.getElementById('profile-settings');
+  if (settingsBtn) {
+    settingsBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      playMenuUiSound('soft');
+      setProfilePane(profilePane === 'view' ? 'edit' : 'view');
+    });
+  }
+  if (closeBtn) {
+    closeBtn.addEventListener('click', function () {
+      playMenuUiSound('soft');
+      setProfileOpen(false);
+    });
+  }
+  const levelOpen = document.getElementById('profile-level-open');
+  if (levelOpen) {
+    levelOpen.addEventListener('click', function (e) {
+      e.stopPropagation();
+      playMenuUiSound('soft');
+      setProfilePane('rewards');
+    });
+  }
+  if (input) {
+    input.addEventListener('input', function () {
+      syncProfileNameConfirm();
+    });
+  }
+  const nameConfirm = document.getElementById('profile-name-confirm');
+  if (nameConfirm) {
+    nameConfirm.addEventListener('click', function (e) {
+      e.stopPropagation();
+      confirmProfileNameChange();
+    });
+  }
+  const prompt = document.getElementById('profile-name-prompt');
+  const promptInput = document.getElementById('profile-name-prompt-input');
+  const promptOk = document.getElementById('profile-name-prompt-ok');
+  const promptCancel = document.getElementById('profile-name-prompt-cancel');
+  if (promptOk) promptOk.addEventListener('click', confirmProfileNamePrompt);
+  if (promptCancel) promptCancel.addEventListener('click', closeProfileNamePrompt);
+  if (prompt) {
+    prompt.addEventListener('click', function (e) {
+      if (e.target === prompt) closeProfileNamePrompt();
+    });
+  }
+  if (promptInput) {
+    promptInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        confirmProfileNamePrompt();
+      }
+    });
+  }
+  document.addEventListener('mouseover', function (e) {
+    const tip = document.getElementById('profile-ach-tip');
+    const bgTip = document.getElementById('profile-bg-tip');
+    const bgImg = document.getElementById('profile-bg-tip-img');
+    const achRow = e.target && e.target.closest ? e.target.closest('[data-ach-tip]') : null;
+    const bgRow = e.target && e.target.closest ? e.target.closest('[data-bg-tip]') : null;
+    if (tip) {
+      if (!achRow) tip.hidden = true;
+      else {
+        tip.textContent = achRow.getAttribute('data-ach-tip') || '';
+        tip.hidden = !tip.textContent;
+        if (!tip.hidden) {
+          const rect = achRow.getBoundingClientRect();
+          const width = Math.min(256, window.innerWidth - 16);
+          let left = rect.left;
+          if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
+          if (left < 8) left = 8;
+          tip.style.width = width + 'px';
+          tip.style.left = left + 'px';
+          tip.style.top = (rect.bottom + 6) + 'px';
+          const h = tip.offsetHeight;
+          if (rect.bottom + 6 + h > window.innerHeight - 8) {
+            tip.style.top = Math.max(8, rect.top - h - 6) + 'px';
+          }
+        }
+      }
+    }
+    if (bgTip && bgImg) {
+      if (!bgRow) {
+        bgTip.hidden = true;
+        bgImg.removeAttribute('src');
+      } else {
+        const src = bgRow.getAttribute('data-bg-tip') || '';
+        if (!src) {
+          bgTip.hidden = true;
+        } else {
+          bgImg.src = src;
+          bgTip.hidden = false;
+          const rect = bgRow.getBoundingClientRect();
+          const width = Math.min(280, window.innerWidth - 16);
+          let left = rect.left;
+          if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
+          if (left < 8) left = 8;
+          bgTip.style.width = width + 'px';
+          bgTip.style.left = left + 'px';
+          bgTip.style.top = (rect.bottom + 6) + 'px';
+          const h = bgTip.offsetHeight;
+          if (rect.bottom + 6 + h > window.innerHeight - 8) {
+            bgTip.style.top = Math.max(8, rect.top - h - 6) + 'px';
+          }
+        }
+      }
+    }
+  });
+  document.addEventListener('click', function (e) {
+    if (!isProfileOpen()) return;
+    const anchor = document.getElementById('profile-anchor');
+    if (anchor && e.target && anchor.contains(e.target)) return;
+    if (e.target && !e.target.isConnected) return;
+    setProfileOpen(false);
+  });
 }
 
 // 장신구: SVG 에셋을 캔버스(뱀 머리)에 렌더 + 꾸미기/뽑기 목록.
@@ -6890,11 +7819,148 @@ const GACHA_TABLE = [
 ];
 
 function updateGachaUI() {
+  if (!FEATURES.gacha) return;
   if (gachaDrawButton) gachaDrawButton.disabled = gachaRolling || getScales() < GACHA_COST;
   if (gachaOwnedSummary) {
     const ownedCount = ownedAccessories.filter(id => id !== 'none').length;
     gachaOwnedSummary.textContent = '보유 장신구 ' + ownedCount + '/' + ACCESSORY_IDS.length;
   }
+}
+
+function shopBgById(id) {
+  for (let i = 0; i < PROFILE_SHOP_BG.length; i++) {
+    if (PROFILE_SHOP_BG[i].id === id) return PROFILE_SHOP_BG[i];
+  }
+  return null;
+}
+
+function buyShopBackground(id) {
+  if (!FEATURES.shop) return;
+  const item = shopBgById(id);
+  if (!item || !PROFILE_BG_URL[item.id]) return;
+  const st = loadProfile();
+  if (st.backgrounds.indexOf(item.id) !== -1) return;
+  const tokens = getScales();
+  if (tokens < item.price) {
+    playMenuDenySound();
+    return;
+  }
+  spendScales(item.price);
+  st.backgrounds.push(item.id);
+  if (!st.bg) st.bg = item.id;
+  saveProfile(st);
+  playMenuUiSound('primary');
+  renderProfile();
+  renderShop();
+  checkExtraAchievements();
+}
+
+const SHOP_CATEGORIES = [
+  { id: 'bg', name: '배경' }
+];
+let shopCategory = 'bg';
+
+function renderShopTabs() {
+  const root = document.getElementById('shop-tabs');
+  if (!root) return;
+  root.textContent = '';
+  SHOP_CATEGORIES.forEach(function (cat) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'shop-tab' + (shopCategory === cat.id ? ' is-on' : '');
+    btn.setAttribute('role', 'tab');
+    btn.setAttribute('aria-selected', shopCategory === cat.id ? 'true' : 'false');
+    btn.textContent = cat.name;
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (shopCategory === cat.id) return;
+      shopCategory = cat.id;
+      playMenuUiSound('soft');
+      renderShop();
+    });
+    root.appendChild(btn);
+  });
+}
+
+function renderShopBackgrounds(root) {
+  const st = loadProfile();
+  const tokens = getScales();
+  const grid = document.createElement('div');
+  grid.className = 'shop-grid';
+  PROFILE_SHOP_BG.forEach(function (item) {
+    if (!PROFILE_BG_URL[item.id]) return;
+    const owned = st.backgrounds.indexOf(item.id) !== -1;
+    const card = document.createElement('article');
+    card.className = 'shop-item' + (owned ? ' is-owned' : '');
+    const preview = document.createElement('div');
+    preview.className = 'shop-item-preview';
+    preview.style.backgroundImage = 'url("' + PROFILE_BG_URL[item.id] + '")';
+    if (owned) {
+      const badge = document.createElement('span');
+      badge.className = 'shop-item-badge';
+      badge.textContent = '보유';
+      preview.appendChild(badge);
+    }
+    const title = document.createElement('div');
+    title.className = 'shop-item-title';
+    const name = document.createElement('span');
+    name.className = 'shop-item-name';
+    name.textContent = item.name;
+    const kind = document.createElement('span');
+    kind.className = 'shop-item-kind';
+    kind.textContent = '프로필 배경';
+    title.appendChild(name);
+    title.appendChild(kind);
+    const foot = document.createElement('div');
+    foot.className = 'shop-item-foot';
+    const price = document.createElement('span');
+    price.className = 'shop-item-price';
+    const priceIcon = document.createElement('img');
+    priceIcon.src = 'assets/icons/token.png';
+    priceIcon.alt = '';
+    priceIcon.className = 'shop-item-price-icon';
+    const priceNum = document.createElement('span');
+    priceNum.textContent = String(item.price);
+    price.appendChild(priceIcon);
+    price.appendChild(priceNum);
+    const buy = document.createElement('button');
+    buy.type = 'button';
+    buy.className = 'shop-item-buy' + (owned ? ' is-owned' : '');
+    if (owned) {
+      buy.textContent = '보유';
+      buy.disabled = true;
+    } else {
+      buy.textContent = '구매';
+      buy.disabled = tokens < item.price;
+      buy.addEventListener('click', function (e) {
+        e.stopPropagation();
+        buyShopBackground(item.id);
+      });
+    }
+    foot.appendChild(price);
+    foot.appendChild(buy);
+    card.appendChild(preview);
+    card.appendChild(title);
+    card.appendChild(foot);
+    grid.appendChild(card);
+  });
+  root.appendChild(grid);
+}
+
+function renderShop() {
+  if (!FEATURES.shop) return;
+  renderShopTabs();
+  const root = document.getElementById('shop-catalog');
+  if (!root) return;
+  root.textContent = '';
+  if (shopCategory === 'bg') {
+    renderShopBackgrounds(root);
+    return;
+  }
+  const empty = document.createElement('p');
+  empty.className = 'shop-empty';
+  empty.textContent = '준비 중...';
+  root.appendChild(empty);
 }
 function setGachaStage({ rarity, kicker, title, desc, src, symbol }) {
   if (gachaStage) {
@@ -7006,7 +8072,7 @@ function startGachaDraw() {
     return;
   }
   gachaRolling = true;
-  setScales(getScales() - GACHA_COST);
+  spendScales(GACHA_COST);
   updateGachaUI();
   playMenuUiSound('primary');
   if (gachaStage) gachaStage.classList.add('is-rolling');
@@ -7072,11 +8138,13 @@ function loadRelicState() {
   const fragments = {};
   const levels = {};
   const pity = {};
+  const off = {};
   let raw = null;
   try { raw = JSON.parse(localStorage.getItem(RELIC_SAVE_KEY) || 'null'); } catch (_) { raw = null; }
   const srcF = raw && raw.fragments ? raw.fragments : {};
   const srcL = raw && raw.levels ? raw.levels : {};
   const srcP = raw && raw.pity ? raw.pity : {};
+  const srcOff = raw && raw.off ? raw.off : {};
   for (let i = 0; i < RELIC_DEFS.length; i++) {
     const id = RELIC_DEFS[i].id;
     let lv = Math.floor(Number(srcL[id]) || 0);
@@ -7098,6 +8166,7 @@ function loadRelicState() {
     if (pityN > 50) pityN = 50;
     if (lv >= RELIC_MAX_LEVEL) pityN = 0;
     pity[id] = { lv: lv, n: pityN };
+    off[id] = lv >= 1 && srcOff[id] ? 1 : 0;
   }
   try {
     if (!localStorage.getItem('snakombo_echo_unlearn_v1')) {
@@ -7105,10 +8174,10 @@ function loadRelicState() {
       fragments.echo = 0;
       pity.echo = 0;
       localStorage.setItem('snakombo_echo_unlearn_v1', '1');
-      localStorage.setItem(RELIC_SAVE_KEY, JSON.stringify({ fragments, levels, pity }));
+      localStorage.setItem(RELIC_SAVE_KEY, JSON.stringify({ fragments, levels, pity, off }));
     }
   } catch (_) {}
-  return { fragments, levels, pity };
+  return { fragments, levels, pity, off };
 }
 function relicPityFails(id, lv) {
   const st = relicState();
@@ -7137,16 +8206,21 @@ function relicLevel(id) {
   const st = relicState();
   return (st.levels && st.levels[id]) || 0;
 }
+function relicActiveLevel(id) {
+  const st = relicState();
+  if (st.off && st.off[id]) return 0;
+  return relicLevel(id);
+}
 const ECHO_MS = [0, 100, 200, 300, 400, 500];
 function relicEchoMs() {
   if (!relicEffectsOn()) return 0;
-  return ECHO_MS[relicLevel('echo')] || 0;
+  return ECHO_MS[relicActiveLevel('echo')] || 0;
 }
 const CLING_CHANCE = [0, 0.08, 0.1, 0.12, 0.14, 0.16];
 const OPAL_CHANCE = [0, 0.04, 0.055, 0.07, 0.085, 0.1];
 function rollRubyScore(pts) {
   if (!relicEffectsOn()) return { pts: pts, base: pts, mult: 1 };
-  const lv = relicLevel('cling');
+  const lv = relicActiveLevel('cling');
   const chance = CLING_CHANCE[lv] || 0;
   if (!(chance > 0) || Math.random() >= chance) return { pts: pts, base: pts, mult: 1 };
   const mult = lv >= 4 ? 3 : 2;
@@ -7154,12 +8228,12 @@ function rollRubyScore(pts) {
 }
 function relicScoreRangeMult() {
   if (!relicEffectsOn()) return 1;
-  const lv = relicLevel('calm');
+  const lv = relicActiveLevel('calm');
   return lv > 0 ? 1 + lv * 0.03 : 1;
 }
 function applyChaseStartScore() {
   if (!relicEffectsOn() || localPlayEnabled || isOnlineMode()) return 0;
-  const pts = relicLevel('chase') * 5;
+  const pts = relicActiveLevel('chase') * 5;
   if (pts > 0) score = pts;
   return pts;
 }
@@ -7168,14 +8242,14 @@ function calcTokenGain(finalScore, playMs) {
   if (tutorialMode || gameMode === 'practice' || gameMode === 'roguelike' || gameMode === 'multi') return 0;
   const scaleMult = (gameMode === 'hard' || gameMode === 'chaos') ? 1.5 : 1;
   let tokenGain = Math.floor((finalScore / 5) * scaleMult);
-  if (relicEffectsOn()) tokenGain = Math.floor(tokenGain * (1 + relicLevel('harvest') * 0.10));
+  if (relicEffectsOn()) tokenGain = Math.floor(tokenGain * (1 + relicActiveLevel('harvest') * 0.10));
   return tokenGain > 0 ? tokenGain : 0;
 }
 function tryOpalRevive() {
   if (!relicEffectsOn() || localPlayEnabled || isOnlineMode()) return false;
   const now = performance.now();
   if (now < opalInvulnUntil) return true;
-  const lv = relicLevel('magnet');
+  const lv = relicActiveLevel('magnet');
   if (lv < 1) return false;
   if (Math.random() >= (OPAL_CHANCE[lv] || 0)) return false;
   const shield = lv >= 5 ? 2000 : lv >= 4 ? 1000 : 0;
@@ -7207,32 +8281,6 @@ function opalWallWrap() {
     points[i].x += dx;
     points[i].y += dy;
   }
-}
-function opalClearObstacle(obs) {
-  if (!obs || !points[0]) return;
-  const c = Math.cos(angle);
-  const s = Math.sin(angle);
-  const hits = (hx, hy) => {
-    for (let i = 0; i < obs.circles.length; i++) {
-      const circ = obs.circles[i];
-      if (checkCollision(hx, hy, obs.x + circ.ox, obs.y + circ.oy, circ.r)) return true;
-    }
-    return false;
-  };
-  for (let d = 8; d <= 280; d += 8) {
-    const hx = points[0].x - c * d;
-    const hy = points[0].y - s * d;
-    if (hx < 4 || hy < 4 || hx > canvas.width - 4 || hy > canvas.height - 4) continue;
-    if (hits(hx, hy)) continue;
-    const dx = hx - points[0].x;
-    const dy = hy - points[0].y;
-    for (let i = 0; i < points.length; i++) {
-      points[i].x += dx;
-      points[i].y += dy;
-    }
-    return;
-  }
-  if (!obs.fadeOut) obs.fadeOut = OBS_FADE_FRAMES;
 }
 function rollRelicFragmentId() {
   if (!relicEffectsOn()) return null;
@@ -7279,6 +8327,7 @@ function grantRelicFragment(obs) {
     st.levels[def.id] = 1;
     saveRelicState(st);
     showRelicUnlockToast(def);
+    try { checkExtraAchievements(); } catch (_) {}
     return def.name + ' 조각 획득';
   }
   st.fragments[def.id] = next;
@@ -7299,7 +8348,7 @@ function enhanceRelic(id) {
     renderRelicPanel();
     return;
   }
-  setScales(getScales() - step.cost);
+  spendScales(step.cost);
   if (!st.pity) st.pity = {};
   const chance = relicSuccessChance(id, lv);
   if (Math.random() >= chance) {
@@ -7372,10 +8421,13 @@ function renderRelicPanel() {
       levels += '<div class="relic-lv' + (n === lv ? ' is-now' : '') + '"><span>Lv.' + n + '</span><span>' +
         relicStatAt(r.id, n) + '</span></div>';
     }
-    const lock = lv >= 1 ? '' :
-      '<div class="relic-lock"><span class="relic-lock-msg">조각 3개를 모아 해제하세요</span>' +
-      '<span class="relic-lock-count">' + fr + '/3</span></div>';
-    html += '<article class="relic-card' + (lv >= 1 ? '' : ' is-locked') + '">' +
+    const off = lv >= 1 && st.off && st.off[r.id];
+    const lock = lv >= 1
+      ? (off ? '<div class="relic-lock"><span class="relic-lock-msg">비활성화</span></div>' : '')
+      : '<div class="relic-lock"><span class="relic-lock-msg">조각 3개를 모아 해제하세요</span>' +
+        '<span class="relic-lock-count">' + fr + '/3</span></div>';
+    html += '<article class="relic-card' + (lv >= 1 ? '' : ' is-locked') + (off ? ' is-off' : '') + '" data-relic-id="' + r.id + '">' +
+      (lv >= 1 ? '<div class="relic-hold-gauge"></div>' : '') +
       '<div class="relic-card-body">' +
       '<div class="relic-card-top"><img class="relic-icon" src="' + r.icon + '" alt="">' +
       '<div><div class="relic-name">' + r.name + '</div>' +
@@ -7384,6 +8436,20 @@ function renderRelicPanel() {
       '<div class="relic-meta"><span>' + meta + '</span>' + btn + '</div></div>' + lock + '</article>';
   }
   list.innerHTML = html;
+}
+let relicHold = null;
+function clearRelicHold() {
+  if (!relicHold) return;
+  cancelAnimationFrame(relicHold.raf);
+  if (relicHold.gauge) relicHold.gauge.style.width = '0%';
+  relicHold = null;
+}
+function toggleRelicOff(id) {
+  const st = relicState();
+  if ((st.levels[id] || 0) < 1) return;
+  if (!st.off) st.off = {};
+  st.off[id] = st.off[id] ? 0 : 1;
+  saveRelicState(st);
 }
 function bindRelicPanel() {
   const list = document.getElementById('relic-list');
@@ -7395,6 +8461,42 @@ function bindRelicPanel() {
     e.stopPropagation();
     enhanceRelic(btn.getAttribute('data-relic-enhance'));
   });
+  list.addEventListener('contextmenu', e => {
+    if (e.target.closest('.relic-card:not(.is-locked)')) e.preventDefault();
+  });
+  list.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    if (e.target.closest('.relic-enhance')) return;
+    const card = e.target.closest('.relic-card');
+    if (!card || card.classList.contains('is-locked')) return;
+    const id = card.getAttribute('data-relic-id');
+    const gauge = card.querySelector('.relic-hold-gauge');
+    if (!id || !gauge) return;
+    clearRelicHold();
+    const start = performance.now();
+    const x = e.clientX;
+    const y = e.clientY;
+    relicHold = { id: id, gauge: gauge, x: x, y: y, raf: 0 };
+    const tick = (now) => {
+      if (!relicHold || relicHold.id !== id) return;
+      const p = Math.min(1, (now - start) / 1500);
+      gauge.style.width = (p * 100) + '%';
+      if (p >= 1) {
+        relicHold = null;
+        toggleRelicOff(id);
+        return;
+      }
+      relicHold.raf = requestAnimationFrame(tick);
+    };
+    relicHold.raf = requestAnimationFrame(tick);
+  });
+  list.addEventListener('pointermove', e => {
+    if (!relicHold) return;
+    if (Math.hypot(e.clientX - relicHold.x, e.clientY - relicHold.y) > 10) clearRelicHold();
+  });
+  list.addEventListener('pointerup', clearRelicHold);
+  list.addEventListener('pointercancel', clearRelicHold);
+  list.addEventListener('pointerleave', clearRelicHold);
 }
 
 
@@ -7555,6 +8657,7 @@ function returnToMainMenu() {
   menuScreen.classList.remove('hidden');
   syncMenuTitleColorFromGameMode();
   updateMenuHighScoreDisplay();
+  renderProfile();
   playTokenFly();
   updatePracticePanelVisibility();
   applyMobileMenuScale();
@@ -7650,8 +8753,93 @@ function maybeShowMainIntro() {
   }
 })();
 
+function syncProfileNameConfirm() {
+  const input = document.getElementById('profile-name-input');
+  const btn = document.getElementById('profile-name-confirm');
+  const note = document.getElementById('profile-name-note');
+  if (!input || !btn) return;
+  const next = input.value.trim();
+  const current = String(loadProfile().name || '').trim();
+  const first = !current;
+  const changed = next.length > 0 && next !== current;
+  const poor = !first && changed && getScales() < PROFILE_NAME_COST;
+  btn.disabled = !changed || poor;
+  btn.textContent = first ? '확인' : ('변경 · ' + PROFILE_NAME_COST);
+  if (note) note.hidden = !poor;
+}
+
+function confirmProfileNameChange() {
+  const input = document.getElementById('profile-name-input');
+  if (!input) return;
+  const next = input.value.trim().slice(0, PROFILE_NAME_MAX);
+  if (!next) return;
+  const cur = loadProfile();
+  const current = String(cur.name || '').trim();
+  if (next === current) return;
+  if (current && getScales() < PROFILE_NAME_COST) {
+    syncProfileNameConfirm();
+    return;
+  }
+  if (current) spendScales(PROFILE_NAME_COST);
+  cur.name = next;
+  saveProfile(cur);
+  playMenuUiSound('soft');
+  renderProfile();
+}
+
+let profileNamePromptDone = null;
+
+function isProfileNamePromptOpen() {
+  const el = document.getElementById('profile-name-prompt');
+  return !!(el && !el.hidden);
+}
+
+function openProfileNamePrompt(done) {
+  const el = document.getElementById('profile-name-prompt');
+  if (!el) {
+    if (done) done();
+    return;
+  }
+  if (isProfileNamePromptOpen()) return;
+  profileNamePromptDone = done || null;
+  const input = document.getElementById('profile-name-prompt-input');
+  if (input) {
+    input.value = '';
+    el.hidden = false;
+    input.focus();
+    return;
+  }
+  el.hidden = false;
+}
+
+function closeProfileNamePrompt() {
+  const el = document.getElementById('profile-name-prompt');
+  if (el) el.hidden = true;
+  profileNamePromptDone = null;
+}
+
+function confirmProfileNamePrompt() {
+  const input = document.getElementById('profile-name-prompt-input');
+  const next = input ? input.value.trim().slice(0, PROFILE_NAME_MAX) : '';
+  if (!next) return;
+  const st = loadProfile();
+  st.name = next;
+  saveProfile(st);
+  renderProfile();
+  const done = profileNamePromptDone;
+  const el = document.getElementById('profile-name-prompt');
+  if (el) el.hidden = true;
+  profileNamePromptDone = null;
+  playMenuUiSound('primary');
+  if (done) done();
+}
+
 function startGame() {
   if (gameRunning) return;
+  if (!profileHasName()) {
+    openProfileNamePrompt(startGame);
+    return;
+  }
   settleTokenFly();
   setHubView(null);
   setMenuInfoOpen(false);
@@ -8154,6 +9342,9 @@ tutorialModal.addEventListener('click', e => {
 });
 
 refreshAchievementsFromStorage();
+try { checkExtraAchievements(); } catch (_) {}
+bindProfilePanel();
+renderProfile();
 loadSelectedMode();
 syncMenuTitleColorFromGameMode();
 loadPracticeSettings();
@@ -8190,6 +9381,12 @@ if (ACHIEVEMENT_TOAST_TEST) {
 document.addEventListener('keydown', e => {
   if (!tutorialModal.classList.contains('hidden')) return;
 
+  if (e.key === 'Escape' && isProfileNamePromptOpen()) {
+    e.preventDefault();
+    closeProfileNamePrompt();
+    return;
+  }
+
   if (e.key === 'Escape' && !menuScreen.classList.contains('hidden')) {
     if (onlinePanel && !onlinePanel.classList.contains('hidden')) {
       e.preventDefault();
@@ -8197,9 +9394,10 @@ document.addEventListener('keydown', e => {
       closeOnlinePanel();
       return;
     }
-    if (menuInfoPanel && menuInfoPanel.classList.contains('is-open')) {
+    if (isProfileOpen()) {
       e.preventDefault();
-      setMenuInfoOpen(false);
+      playMenuUiSound('soft');
+      setProfileOpen(false);
       return;
     }
     if (isHubOpen()) {
@@ -8232,8 +9430,15 @@ document.addEventListener('keydown', e => {
     return;
   }
 
+  if (e.key === 'Enter' && isProfileNamePromptOpen()) {
+    e.preventDefault();
+    confirmProfileNamePrompt();
+    return;
+  }
+
   if (e.key === 'Enter' && !menuScreen.classList.contains('hidden')) {
     if (isHubOpen()) return;
+    if (isProfileOpen()) return;
     if (menuInfoPanel && menuInfoPanel.classList.contains('is-open')) return;
     if (onlinePanel && !onlinePanel.classList.contains('hidden')) return;
     e.preventDefault();

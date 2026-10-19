@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Snakombo</title>
 <link rel="icon" href="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/flame.svg" type="image/svg+xml">
-<link rel="stylesheet" href="main.css?v=20261018-gemui">
+<link rel="stylesheet" href="main.css?v=20261019-rare2">
 <script>
   // 로딩 화면은 "처음 진입"에만 표시 (새로고침 플래시 방지용: 첫 페인트 전에 결정)
   (function () {
@@ -48,24 +48,366 @@
   <div id="achievement-toast-root" aria-live="polite" aria-atomic="true"></div>
 
   <div id="menu-screen" class="menu-animate relative z-10 flex min-h-screen flex-col items-center justify-center px-6 py-12">
-    <div id="menu-info-wrap" class="absolute left-5 top-5 z-30 flex flex-col items-start sm:left-8 sm:top-8">
-      <button
-        type="button"
-        id="menu-info-toggle"
-        class="rounded-xl p-1.5 opacity-90 outline-none ring-0 transition hover:bg-white/10 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-white/40"
-        aria-expanded="false"
-        aria-controls="menu-info-panel"
-        aria-label="상세정보 열기"
-      >
-        <img
-          src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/info.svg"
-          alt=""
-          class="pointer-events-none h-9 w-9 brightness-0 invert sm:h-10 sm:w-10"
-          loading="lazy"
-          decoding="async"
-        />
-      </button>
+    <div id="menu-hub-wrap" class="absolute left-5 top-5 z-30 flex flex-col items-start sm:left-8 sm:top-8">
+      <div class="flex items-center gap-2">
+        <button
+          type="button"
+          id="menu-hub-toggle"
+          class="rounded-xl p-1.5 opacity-90 outline-none ring-0 transition hover:bg-white/10 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-white/40"
+          aria-expanded="false"
+          aria-controls="menu-hub-panel"
+          aria-label="메뉴 열기"
+        >
+          <img
+            src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/layout-grid.svg"
+            alt=""
+            class="pointer-events-none h-9 w-9 brightness-0 invert sm:h-10 sm:w-10"
+            loading="lazy"
+            decoding="async"
+          />
+        </button>
+      </div>
+      <!-- 2x2 런처 그리드 -->
+      <div id="menu-hub-panel" class="menu-hub-panel" role="menu" aria-label="메뉴" aria-hidden="true">
+        <button type="button" class="menu-hub-item" data-hub="info" role="menuitem">
+          <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/info.svg" alt="" class="menu-hub-icon" loading="lazy" decoding="async" />
+          <span>정보</span>
+        </button>
+        <button type="button" class="menu-hub-item" data-hub="achievements" role="menuitem">
+          <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/crown.svg" alt="" class="menu-hub-icon" loading="lazy" decoding="async" />
+          <span>업적</span>
+        </button>
+        <button type="button" class="menu-hub-item" data-hub="gems" role="menuitem">
+          <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/gem.svg" alt="" class="menu-hub-icon" loading="lazy" decoding="async" />
+          <span>보석</span>
+        </button>
+        <button type="button" class="menu-hub-item" data-hub="shop" role="menuitem">
+          <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/shopping-bag.svg" alt="" class="menu-hub-icon" loading="lazy" decoding="async" />
+          <span>상점</span>
+        </button>
+      </div>
       <div
+        id="achievements-panel"
+        class="flex w-[min(18rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-zinc-500/45 bg-zinc-700/92 text-zinc-200 shadow-xl shadow-black/40 ring-1 ring-zinc-400/25"
+        role="region"
+        aria-labelledby="achievements-heading"
+        aria-hidden="true"
+      >
+        <div class="border-b border-zinc-500/35 bg-zinc-600/35 px-4 py-3">
+          <div class="flex items-start justify-between gap-2">
+            <button type="button" class="menu-hub-back" data-hub-back aria-label="뒤로">&larr;</button>
+            <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <h2 id="achievements-heading" class="text-[15px] font-extrabold tracking-tight text-zinc-50">업적</h2>
+              <p class="max-w-[14rem] text-[11px] font-medium leading-snug text-zinc-400 sm:text-xs">달성한 항목이 여기에 쌓여요</p>
+            </div>
+            <div id="achievements-progress" class="shrink-0 self-center text-[11px] font-extrabold tabular-nums text-zinc-300/85">달성률 0%</div>
+          </div>
+        </div>
+        <div
+          class="achievements-scroll min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden bg-zinc-700/50 px-2 py-3"
+          role="list"
+          aria-label="업적 목록"
+        >
+          <div role="listitem" class="achievement-card" data-achievement-id="first_play" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">첫 플레이</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">게임을 한 판 플래이 하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="score_35" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">점수 사냥꾼</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">일반모드에서 한 판에서 35점 이상을 획득하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="combo_10" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">콤보 마스터</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">한 판에서 콤보 10 이상을 달성하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="tutorial_done" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">튜토리얼 수료</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">튜토리얼을 완료하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="high_60" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">한계 돌파</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">일반모드에서 최고 기록을 85점 이상으로 올리세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="games_20" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">단골손님</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">게임을 20회 플래이 하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="lucky_7_streak" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">행운아</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">딱 7점을 2회 연속으로 획득하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="square_streak_3" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">제제곱수</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">3회 연속으로 5가 넘는 제곱수인 점수를 얻으세요!</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="tikkeul_taesan" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">티끌모아 태산</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">한 게임에서 5콤보 이상 달성하지 않고, 콤보점수로 25점 이상을 얻으세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="movement" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">무브먼트</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">움직이는 장애물을 2회 연속 통과하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="lane_forbidden_25" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">통행금지</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">일반모드에서 왼쪽 또는 오른쪽에만 머물며 25점 이상을 획득하세요(2초까지는 허용)</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="devil_44" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">악마</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">일반모드에서 딱 44점을 획득하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="practice_20min" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">연습이 완벽을 만든다</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">연습모드를 총 20분 플래이하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="chaos_99" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">소멸</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">혼돈모드에서 99점 이상을 달성하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="rogue_ssam" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">쌈</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">로그라이크 모드에서 한 판에 레벨3 증강을 2개 만드세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="rogue_lv2_75" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">로그라2크</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">로그라이크 모드에서 2렙 증강만 가지고 있는 상태로 75초 이상 생존하고 죽으세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="rogue_one_shot_13" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">인생은 한방</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">로그라이크 모드에서 하나의 장애물로 15점 이상을 얻으세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="level_half" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">시작이 반이다..?</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">레벨 40 보상을 받으세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="collector_bg" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">수집광</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">프로필 배경을 5개 이상 구매하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card" data-achievement-id="gem_jeweler" data-achievement-hidden="false">
+            <div class="achievement-title-row">
+              <span class="achievement-title">보석 세공사</span>
+              <span class="achievement-kind">[일반 업적]</span>
+            </div>
+            <p class="achievement-desc">모든 보석을 수집하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card achievement-rare" data-achievement-id="archdevil_44_hard" data-achievement-hidden="false" data-achievement-rare="true">
+            <div class="achievement-title-row">
+              <span class="achievement-title">대악마</span>
+              <span class="achievement-kind">[희귀 업적]</span>
+            </div>
+            <p class="achievement-desc">하드모드에서 점수 딱 44점을 획득하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card achievement-rare" data-achievement-id="transcend_150" data-achievement-hidden="false" data-achievement-rare="true">
+            <div class="achievement-title-row">
+              <span class="achievement-title">초월한 자</span>
+              <span class="achievement-kind">[희귀 업적]</span>
+            </div>
+            <p class="achievement-desc">일반, 하드, 혼돈 모두의 최고 기록을 150점 이상 달성하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card achievement-rare" data-achievement-id="level_max" data-achievement-hidden="false" data-achievement-rare="true">
+            <div class="achievement-title-row">
+              <span class="achievement-title">10000렙!</span>
+              <span class="achievement-kind">[희귀 업적]</span>
+            </div>
+            <p class="achievement-desc">레벨 80 보상을 받으세요</p>
+          </div>
+          <div role="listitem" class="achievement-card achievement-rare" data-achievement-id="rogue_god" data-achievement-hidden="false" data-achievement-rare="true">
+            <div class="achievement-title-row">
+              <span class="achievement-title">로그라이크의 신</span>
+              <span class="achievement-kind">[희귀 업적]</span>
+            </div>
+            <p class="achievement-desc">로그라이크 모드에서 140초 이상 생존하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card achievement-rare" data-achievement-id="golden_age" data-achievement-hidden="false" data-achievement-rare="true">
+            <div class="achievement-title-row">
+              <span class="achievement-title">황금의 시대</span>
+              <span class="achievement-kind">[희귀 업적]</span>
+            </div>
+            <p class="achievement-desc">총 3000토큰을 사용하세요</p>
+          </div>
+          <div role="listitem" class="achievement-card achievement-rare" data-achievement-id="collector_plus" data-achievement-hidden="false" data-achievement-rare="true">
+            <div class="achievement-title-row">
+              <span class="achievement-title">수집광+</span>
+              <span class="achievement-kind">[희귀 업적]</span>
+            </div>
+            <p class="achievement-desc">모든 상점 프로필 배너를 구매하세요</p>
+          </div>
+          <div
+            role="listitem"
+            class="achievement-card achievement-hidden"
+            data-achievement-id="hidden_early_bird"
+            data-achievement-hidden="true"
+            data-reveal-desc="아침 7시~8시 사이에 한 판에서 15점 이상을 획득하세요"
+          >
+            <div class="achievement-title-row">
+              <span class="achievement-title">일찍 일어나는 새</span>
+              <span class="achievement-kind">[숨겨진 업적]</span>
+            </div>
+            <p class="achievement-desc achievement-desc-hidden">???</p>
+          </div>
+          <div
+            role="listitem"
+            class="achievement-card achievement-hidden"
+            data-achievement-id="hidden_practice_500"
+            data-achievement-hidden="true"
+            data-reveal-desc="연습모드에서 500점을 달성하세요"
+          >
+            <div class="achievement-title-row">
+              <span class="achievement-title">연습의 대가</span>
+              <span class="achievement-kind">[숨겨진 업적]</span>
+            </div>
+            <p class="achievement-desc achievement-desc-hidden">???</p>
+          </div>
+          <div
+            role="listitem"
+            class="achievement-card achievement-hidden"
+            data-achievement-id="hidden_dizzy_mode_switch"
+            data-achievement-hidden="true"
+            data-reveal-desc="2초동안 모드 변경을 10번 이상 하세요!"
+          >
+            <div class="achievement-title-row">
+              <span class="achievement-title">어지러워요</span>
+              <span class="achievement-kind">[숨겨진 업적]</span>
+            </div>
+            <p class="achievement-desc achievement-desc-hidden">???</p>
+          </div>
+          <div
+            role="listitem"
+            class="achievement-card achievement-hidden"
+            data-achievement-id="hidden_beginner"
+            data-achievement-hidden="true"
+            data-reveal-desc="15초 동안 0점을 유지하세요"
+          >
+            <div class="achievement-title-row">
+              <span class="achievement-title">초보자..?</span>
+              <span class="achievement-kind">[숨겨진 업적]</span>
+            </div>
+            <p class="achievement-desc achievement-desc-hidden">???</p>
+          </div>
+          <div
+            role="listitem"
+            class="achievement-card achievement-hidden"
+            data-achievement-id="hidden_ace_a_only"
+            data-achievement-hidden="true"
+            data-reveal-desc="한 게임에서 a키만을 사용해 25점 이상 얻으세요"
+          >
+            <div class="achievement-title-row">
+              <span class="achievement-title">"A"ce</span>
+              <span class="achievement-kind">[숨겨진 업적]</span>
+            </div>
+            <p class="achievement-desc achievement-desc-hidden">???</p>
+          </div>
+          <div
+            role="listitem"
+            class="achievement-card achievement-hidden"
+            data-achievement-id="hidden_token_1000"
+            data-achievement-hidden="true"
+            data-reveal-desc="토큰을 한 번에 1000개 이상 가지고 있으세요"
+          >
+            <div class="achievement-title-row">
+              <span class="achievement-title">아끼다 똥된다</span>
+              <span class="achievement-kind">[숨겨진 업적]</span>
+            </div>
+            <p class="achievement-desc achievement-desc-hidden">???</p>
+          </div>
+        </div>
+      </div>
+
+      <div
+        id="menu-customize-panel"
+        class="flex w-[min(22rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-zinc-500/45 bg-zinc-700/92 text-zinc-200 shadow-xl shadow-black/40 ring-1 ring-zinc-400/25"
+        role="region"
+        aria-labelledby="menu-customize-title"
+        aria-hidden="true"
+      >
+        <div class="border-b border-zinc-500/35 bg-zinc-600/35 px-4 py-3">
+          <div class="flex items-center gap-2">
+            <button type="button" class="menu-hub-back" data-hub-back aria-label="뒤로">&larr;</button>
+            <h2 id="menu-customize-title" class="text-[15px] font-extrabold tracking-tight text-zinc-50">보석</h2>
+          </div>
+        </div>
+        <div class="relic-scroll menu-info-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-zinc-700/50">
+          <div id="relic-list"></div>
+        </div>
+      </div>
+
+      <div
+        id="menu-shop-panel"
+        class="flex w-[min(24rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-zinc-500/45 bg-zinc-700/92 text-zinc-200 shadow-xl shadow-black/40 ring-1 ring-zinc-400/25"
+        role="region"
+        aria-labelledby="menu-shop-title"
+        aria-hidden="true"
+      >
+        <div class="border-b border-zinc-500/35 bg-zinc-600/35 px-4 py-3">
+          <div class="flex items-center gap-2">
+            <button type="button" class="menu-hub-back" data-hub-back aria-label="뒤로">&larr;</button>
+            <h2 id="menu-shop-title" class="text-[15px] font-extrabold tracking-tight text-zinc-50">상점</h2>
+          </div>
+          <div id="shop-tabs" class="shop-tabs" role="tablist" aria-label="상점 분류"></div>
+        </div>
+        <div class="shop-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-zinc-700/50 px-3 py-3">
+          <div id="shop-catalog" class="shop-catalog"></div>
+        </div>
+      </div>
+    <div
         id="menu-info-panel"
         class="flex w-[min(24rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-zinc-500/45 bg-zinc-700/92 text-zinc-200 shadow-xl shadow-black/40 ring-1 ring-zinc-400/25"
         role="region"
@@ -74,7 +416,8 @@
       >
         <div class="border-b border-zinc-500/35 bg-zinc-600/35 px-4 py-3">
           <div class="flex items-start justify-between gap-2">
-            <div class="min-w-0 pr-1">
+            <button type="button" class="menu-hub-back" data-hub-back aria-label="뒤로">&larr;</button>
+            <div class="min-w-0 flex-1 pr-1">
               <h2 id="menu-info-title" class="text-[15px] font-extrabold tracking-tight text-zinc-50">상세정보</h2>
               <div class="mt-1 flex flex-wrap items-center gap-1.5" role="tablist" aria-label="상세정보 보기 전환">
                 <button
@@ -271,6 +614,19 @@
                       <p>같은 조각 3개를 모으면 보석이 열리고, 그때부터 효과가 적용됩니다.</p>
                       <p>토큰으로 강화합니다. 실패해도 보석은 깨지지 않고 레벨도 그대로입니다.</p>
                       <p>실패할 때마다 그 단계의 성공 확률이 2% 추가됩니다. 성공하면 사라집니다.</p>
+                      <p>열린 보석을 1.5초 동안 누르고 있으면 효과가 꺼집니다. 다시 1.5초 누르면 켜집니다.</p>
+                    </div>
+                    <div class="info-ch">
+                      <div class="info-ch-title">프로필</div>
+                      <p>오른쪽 위 프로필에서 이름과 레벨을 볼 수 있습니다.</p>
+                      <p>이름은 처음 게임을 시작할 때 정합니다. 그 다음부터 바꾸면 토큰 50개가 듭니다.</p>
+                      <p>일반은 점수 1점당 경험치 1, 하드와 혼돈은 2배입니다. 로그라이크는 1초당 경험치 1.5입니다.</p>
+                      <p>게임을 10초 이상 진행해야 경험치를 받습니다.</p>
+                      <p>연습과 멀티에서는 경험치를 받지 않습니다.</p>
+                      <p>레벨이 오르면 그 칸을 눌러 보상을 받습니다. 보통은 토큰 20개, 5레벨마다는 50개입니다.</p>
+                      <p>10레벨마다는 프로필 배경을 받습니다. 40레벨과 80레벨에는 업적이 나옵니다. 만렙은 80입니다.</p>
+                      <p>프로필을 누르면 남에게 보이는 카드가 열립니다. 설정에서 배경, 업적 3개, 최고 기록 2개를 고릅니다.</p>
+                      <p>상점에서 토큰으로 프로필 배경을 살 수 있습니다.</p>
                     </div>
                   </div>
                 </div>
@@ -281,6 +637,51 @@
             <div class="info-stack" data-acc="patch">
               <section class="info-box is-open">
                 <button type="button" class="info-box-head" aria-expanded="true">
+                  <span>ver.1.10</span>
+                  <span class="info-box-chev" aria-hidden="true"></span>
+                </button>
+                <div class="info-box-body">
+                  <div class="info-box-body-inner info-copy">
+                    <ul>
+                      <li>뽑기가 <strong class="text-zinc-200">상점</strong>으로 바뀌었습니다</li>
+                      <li>상점에서 토큰으로 프로필 배경을 살 수 있습니다</li>
+                      <li>퀘스트 메뉴를 없앴습니다</li>
+                    </ul>
+                  </div>
+                </div>
+              </section>
+              <section class="info-box">
+                <button type="button" class="info-box-head" aria-expanded="false">
+                  <span>ver.1.9</span>
+                  <span class="info-box-chev" aria-hidden="true"></span>
+                </button>
+                <div class="info-box-body">
+                  <div class="info-box-body-inner info-copy">
+                    <ul>
+                      <li>메인 화면에 <strong class="text-zinc-200">프로필</strong>이 생겼습니다</li>
+                      <li>게임을 하면 경험치를 얻고, 레벨 칸을 눌러 보상을 받습니다</li>
+                      <li>보통은 토큰, 10레벨마다는 프로필 배경입니다. 40·80레벨에는 업적이 나옵니다</li>
+                      <li>프로필에서 업적 3개, 최고 기록 2개를 골라 보여줄 수 있습니다</li>
+                    </ul>
+                  </div>
+                </div>
+              </section>
+              <section class="info-box">
+                <button type="button" class="info-box-head" aria-expanded="false">
+                  <span>ver.1.8</span>
+                  <span class="info-box-chev" aria-hidden="true"></span>
+                </button>
+                <div class="info-box-body">
+                  <div class="info-box-body-inner info-copy">
+                    <ul>
+                      <li>열린 보석을 <strong class="text-zinc-200">1.5초</strong> 누르면 효과가 꺼집니다</li>
+                      <li>한 번 더 누르면 다시 켜집니다</li>
+                    </ul>
+                  </div>
+                </div>
+              </section>
+              <section class="info-box">
+                <button type="button" class="info-box-head" aria-expanded="false">
                   <span>ver.1.7</span>
                   <span class="info-box-chev" aria-hidden="true"></span>
                 </button>
@@ -400,347 +801,70 @@
         </div>
       </div>
     </div>
-    <div id="menu-hub-wrap" class="absolute right-5 top-[18px] z-30 flex flex-col items-end sm:right-8 sm:top-[30px]">
-      <div class="flex items-center gap-2">
-        <div id="scales-display" class="scales-pill" role="status" aria-label="토큰">
-          <img class="scales-icon" src="assets/icons/token.png" alt="">
-          <span id="scales-count" class="scales-count">0</span>
-        </div>
-        <button
-          type="button"
-          id="menu-hub-toggle"
-          class="rounded-xl p-1.5 opacity-90 outline-none ring-0 transition hover:bg-white/10 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-white/40"
-          aria-expanded="false"
-          aria-controls="menu-hub-panel"
-          aria-label="메뉴 열기"
-        >
-          <img
-            src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/layout-grid.svg"
-            alt=""
-            class="pointer-events-none h-9 w-9 brightness-0 invert sm:h-10 sm:w-10"
-            loading="lazy"
-            decoding="async"
-          />
-        </button>
+    <div id="profile-row" class="profile-row">
+      <div id="scales-display" class="scales-pill" role="status" aria-label="토큰">
+        <img class="scales-icon" src="assets/icons/token.png" alt="">
+        <span id="scales-count" class="scales-count">0</span>
       </div>
-      <!-- 2x2 런처 그리드 -->
-      <div id="menu-hub-panel" class="menu-hub-panel" role="menu" aria-label="메뉴" aria-hidden="true">
-        <button type="button" class="menu-hub-item" data-hub="achievements" role="menuitem">
-          <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/crown.svg" alt="" class="menu-hub-icon" loading="lazy" decoding="async" />
-          <span>업적</span>
+      <div id="profile-anchor" class="profile-anchor">
+        <button type="button" id="profile-slot" class="profile-slot" aria-expanded="false" aria-controls="profile-panel" aria-label="프로필">
+          <span id="profile-name" class="profile-name">플레이어</span>
+          <span id="profile-level" class="profile-level">Lv.1</span>
         </button>
-        <button type="button" class="menu-hub-item" data-hub="gems" role="menuitem">
-          <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/gem.svg" alt="" class="menu-hub-icon" loading="lazy" decoding="async" />
-          <span>보석</span>
-        </button>
-        <button type="button" class="menu-hub-item" data-hub="quest" role="menuitem">
-          <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/scroll-text.svg" alt="" class="menu-hub-icon" loading="lazy" decoding="async" />
-          <span>퀘스트</span>
-        </button>
-        <button type="button" class="menu-hub-item opacity-40 pointer-events-none" data-hub="gacha" role="menuitem" aria-disabled="true" tabindex="-1">
-          <img src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/gift.svg" alt="" class="menu-hub-icon" loading="lazy" decoding="async" />
-          <span>뽑기</span>
-        </button>
-      </div>
-      <div
-        id="achievements-panel"
-        class="flex w-[min(18rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-zinc-500/45 bg-zinc-700/92 text-zinc-200 shadow-xl shadow-black/40 ring-1 ring-zinc-400/25"
-        role="region"
-        aria-labelledby="achievements-heading"
-        aria-hidden="true"
-      >
-        <div class="border-b border-zinc-500/35 bg-zinc-600/35 px-4 py-3">
-          <div class="flex items-start justify-between gap-2">
-            <button type="button" class="menu-hub-back" data-hub-back aria-label="뒤로">&larr;</button>
-            <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <h2 id="achievements-heading" class="text-[15px] font-extrabold tracking-tight text-zinc-50">업적</h2>
-              <p class="max-w-[14rem] text-[11px] font-medium leading-snug text-zinc-400 sm:text-xs">달성한 항목이 여기에 쌓여요</p>
-            </div>
-            <div id="achievements-progress" class="shrink-0 self-center text-[11px] font-extrabold tabular-nums text-zinc-300/85">달성률 0%</div>
+        <div id="profile-panel" class="profile-panel" role="dialog" aria-label="프로필" aria-hidden="true">
+          <div class="profile-panel-head">
+            <span id="profile-panel-title">프로필</span>
+            <span class="profile-panel-actions">
+              <button type="button" id="profile-settings" class="profile-icon-btn" aria-label="설정">
+                <img id="profile-settings-icon" src="https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/settings.svg" alt="">
+              </button>
+              <button type="button" id="profile-close" class="menu-hub-back" aria-label="닫기">&times;</button>
+            </span>
           </div>
-        </div>
-        <div
-          class="achievements-scroll min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden bg-zinc-700/50 px-2 py-3"
-          role="list"
-          aria-label="업적 목록"
-        >
-          <div role="listitem" class="achievement-card" data-achievement-id="first_play" data-achievement-hidden="false">
-            <div class="achievement-title-row">
-              <span class="achievement-title">첫 플레이</span>
-              <span class="achievement-kind">[일반 업적]</span>
-            </div>
-            <p class="achievement-desc">게임을 한 판 플래이 하세요</p>
-          </div>
-          <div role="listitem" class="achievement-card" data-achievement-id="score_35" data-achievement-hidden="false">
-            <div class="achievement-title-row">
-              <span class="achievement-title">점수 사냥꾼</span>
-              <span class="achievement-kind">[일반 업적]</span>
-            </div>
-            <p class="achievement-desc">일반모드에서 한 판에서 35점 이상을 획득하세요</p>
-          </div>
-          <div role="listitem" class="achievement-card" data-achievement-id="combo_10" data-achievement-hidden="false">
-            <div class="achievement-title-row">
-              <span class="achievement-title">콤보 마스터</span>
-              <span class="achievement-kind">[일반 업적]</span>
-            </div>
-            <p class="achievement-desc">한 판에서 콤보 10 이상을 달성하세요</p>
-          </div>
-          <div role="listitem" class="achievement-card" data-achievement-id="tutorial_done" data-achievement-hidden="false">
-            <div class="achievement-title-row">
-              <span class="achievement-title">튜토리얼 수료</span>
-              <span class="achievement-kind">[일반 업적]</span>
-            </div>
-            <p class="achievement-desc">튜토리얼을 완료하세요</p>
-          </div>
-          <div role="listitem" class="achievement-card" data-achievement-id="high_60" data-achievement-hidden="false">
-            <div class="achievement-title-row">
-              <span class="achievement-title">한계 돌파</span>
-              <span class="achievement-kind">[일반 업적]</span>
-            </div>
-            <p class="achievement-desc">일반모드에서 최고 기록을 85점 이상으로 올리세요</p>
-          </div>
-          <div role="listitem" class="achievement-card" data-achievement-id="games_20" data-achievement-hidden="false">
-            <div class="achievement-title-row">
-              <span class="achievement-title">단골손님</span>
-              <span class="achievement-kind">[일반 업적]</span>
-            </div>
-            <p class="achievement-desc">게임을 20회 플래이 하세요</p>
-          </div>
-          <div role="listitem" class="achievement-card" data-achievement-id="lucky_7_streak" data-achievement-hidden="false">
-            <div class="achievement-title-row">
-              <span class="achievement-title">행운아</span>
-              <span class="achievement-kind">[일반 업적]</span>
-            </div>
-            <p class="achievement-desc">딱 7점을 2회 연속으로 획득하세요</p>
-          </div>
-          <div role="listitem" class="achievement-card" data-achievement-id="square_streak_3" data-achievement-hidden="false">
-            <div class="achievement-title-row">
-              <span class="achievement-title">제제곱수</span>
-              <span class="achievement-kind">[일반 업적]</span>
-            </div>
-            <p class="achievement-desc">3회 연속으로 5가 넘는 제곱수인 점수를 얻으세요!</p>
-          </div>
-          <div role="listitem" class="achievement-card" data-achievement-id="tikkeul_taesan" data-achievement-hidden="false">
-            <div class="achievement-title-row">
-              <span class="achievement-title">티끌모아 태산</span>
-              <span class="achievement-kind">[일반 업적]</span>
-            </div>
-            <p class="achievement-desc">한 게임에서 5콤보 이상 달성하지 않고, 콤보점수로 25점 이상을 얻으세요</p>
-          </div>
-          <div role="listitem" class="achievement-card" data-achievement-id="movement" data-achievement-hidden="false">
-            <div class="achievement-title-row">
-              <span class="achievement-title">무브먼트</span>
-              <span class="achievement-kind">[일반 업적]</span>
-            </div>
-            <p class="achievement-desc">움직이는 장애물을 2회 연속 통과하세요</p>
-          </div>
-          <div role="listitem" class="achievement-card" data-achievement-id="lane_forbidden_25" data-achievement-hidden="false">
-            <div class="achievement-title-row">
-              <span class="achievement-title">통행금지</span>
-              <span class="achievement-kind">[일반 업적]</span>
-            </div>
-            <p class="achievement-desc">일반모드에서 왼쪽 또는 오른쪽에만 머물며 25점 이상을 획득하세요(2초까지는 허용)</p>
-          </div>
-          <div role="listitem" class="achievement-card" data-achievement-id="devil_44" data-achievement-hidden="false">
-            <div class="achievement-title-row">
-              <span class="achievement-title">악마</span>
-              <span class="achievement-kind">[일반 업적]</span>
-            </div>
-            <p class="achievement-desc">일반모드에서 딱 44점을 획득하세요</p>
-          </div>
-          <div role="listitem" class="achievement-card" data-achievement-id="practice_20min" data-achievement-hidden="false">
-            <div class="achievement-title-row">
-              <span class="achievement-title">연습이 완벽을 만든다</span>
-              <span class="achievement-kind">[일반 업적]</span>
-            </div>
-            <p class="achievement-desc">연습모드를 총 20분 플래이하세요</p>
-          </div>
-          <div role="listitem" class="achievement-card" data-achievement-id="archdevil_44_hard" data-achievement-hidden="false">
-            <div class="achievement-title-row">
-              <span class="achievement-title">대악마</span>
-              <span class="achievement-kind">[일반 업적]</span>
-            </div>
-            <p class="achievement-desc">하드모드에서 점수 딱 44점을 획득하세요</p>
-          </div>
-          <div role="listitem" class="achievement-card" data-achievement-id="chaos_99" data-achievement-hidden="false">
-            <div class="achievement-title-row">
-              <span class="achievement-title">소멸</span>
-              <span class="achievement-kind">[일반 업적]</span>
-            </div>
-            <p class="achievement-desc">혼돈모드에서 99점 이상을 달성하세요</p>
-          </div>
-          <div role="listitem" class="achievement-card" data-achievement-id="rogue_ssam" data-achievement-hidden="false">
-            <div class="achievement-title-row">
-              <span class="achievement-title">쌈</span>
-              <span class="achievement-kind">[일반 업적]</span>
-            </div>
-            <p class="achievement-desc">로그라이크 모드에서 한 판에 레벨3 증강을 2개 만드세요</p>
-          </div>
-          <div role="listitem" class="achievement-card" data-achievement-id="rogue_lv2_75" data-achievement-hidden="false">
-            <div class="achievement-title-row">
-              <span class="achievement-title">로그라2크</span>
-              <span class="achievement-kind">[일반 업적]</span>
-            </div>
-            <p class="achievement-desc">로그라이크 모드에서 2렙 증강만 가지고 있는 상태로 75초 이상 생존하고 죽으세요</p>
-          </div>
-          <div role="listitem" class="achievement-card" data-achievement-id="rogue_one_shot_13" data-achievement-hidden="false">
-            <div class="achievement-title-row">
-              <span class="achievement-title">인생은 한방</span>
-              <span class="achievement-kind">[일반 업적]</span>
-            </div>
-            <p class="achievement-desc">로그라이크 모드에서 하나의 장애물로 15점 이상을 얻으세요</p>
-          </div>
-          <div role="listitem" class="achievement-card" data-achievement-id="rogue_god" data-achievement-hidden="false">
-            <div class="achievement-title-row">
-              <span class="achievement-title">로그라이크의 신</span>
-              <span class="achievement-kind">[일반 업적]</span>
-            </div>
-            <p class="achievement-desc">로그라이크 모드에서 135초 이상 생존하세요</p>
-          </div>
-          <div
-            role="listitem"
-            class="achievement-card achievement-hidden"
-            data-achievement-id="hidden_early_bird"
-            data-achievement-hidden="true"
-            data-reveal-desc="아침 7시~8시 사이에 한 판에서 15점 이상을 획득하세요"
-          >
-            <div class="achievement-title-row">
-              <span class="achievement-title">일찍 일어나는 새</span>
-              <span class="achievement-kind">[숨겨진 업적]</span>
-            </div>
-            <p class="achievement-desc achievement-desc-hidden">???</p>
-          </div>
-          <div
-            role="listitem"
-            class="achievement-card achievement-hidden"
-            data-achievement-id="hidden_practice_500"
-            data-achievement-hidden="true"
-            data-reveal-desc="연습모드에서 500점을 달성하세요"
-          >
-            <div class="achievement-title-row">
-              <span class="achievement-title">연습의 대가</span>
-              <span class="achievement-kind">[숨겨진 업적]</span>
-            </div>
-            <p class="achievement-desc achievement-desc-hidden">???</p>
-          </div>
-          <div
-            role="listitem"
-            class="achievement-card achievement-hidden"
-            data-achievement-id="hidden_dizzy_mode_switch"
-            data-achievement-hidden="true"
-            data-reveal-desc="2초동안 모드 변경을 10번 이상 하세요!"
-          >
-            <div class="achievement-title-row">
-              <span class="achievement-title">어지러워요</span>
-              <span class="achievement-kind">[숨겨진 업적]</span>
-            </div>
-            <p class="achievement-desc achievement-desc-hidden">???</p>
-          </div>
-          <div
-            role="listitem"
-            class="achievement-card achievement-hidden"
-            data-achievement-id="hidden_beginner"
-            data-achievement-hidden="true"
-            data-reveal-desc="15초 동안 0점을 유지하세요"
-          >
-            <div class="achievement-title-row">
-              <span class="achievement-title">초보자..?</span>
-              <span class="achievement-kind">[숨겨진 업적]</span>
-            </div>
-            <p class="achievement-desc achievement-desc-hidden">???</p>
-          </div>
-          <div
-            role="listitem"
-            class="achievement-card achievement-hidden"
-            data-achievement-id="hidden_ace_a_only"
-            data-achievement-hidden="true"
-            data-reveal-desc="한 게임에서 a키만을 사용해 25점 이상 얻으세요"
-          >
-            <div class="achievement-title-row">
-              <span class="achievement-title">"A"ce</span>
-              <span class="achievement-kind">[숨겨진 업적]</span>
-            </div>
-            <p class="achievement-desc achievement-desc-hidden">???</p>
-          </div>
-        </div>
-      </div>
-
-      <div
-        id="menu-customize-panel"
-        class="flex w-[min(22rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-zinc-500/45 bg-zinc-700/92 text-zinc-200 shadow-xl shadow-black/40 ring-1 ring-zinc-400/25"
-        role="region"
-        aria-labelledby="menu-customize-title"
-        aria-hidden="true"
-      >
-        <div class="border-b border-zinc-500/35 bg-zinc-600/35 px-4 py-3">
-          <div class="flex items-center gap-2">
-            <button type="button" class="menu-hub-back" data-hub-back aria-label="뒤로">&larr;</button>
-            <h2 id="menu-customize-title" class="text-[15px] font-extrabold tracking-tight text-zinc-50">보석</h2>
-          </div>
-        </div>
-        <div class="relic-scroll menu-info-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-zinc-700/50">
-          <div id="relic-list"></div>
-        </div>
-      </div>
-
-      <div
-        id="menu-quest-panel"
-        class="flex w-[min(18rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-zinc-500/45 bg-zinc-700/92 text-zinc-200 shadow-xl shadow-black/40 ring-1 ring-zinc-400/25"
-        role="region"
-        aria-labelledby="menu-quest-title"
-        aria-hidden="true"
-      >
-        <div class="border-b border-zinc-500/35 bg-zinc-600/35 px-4 py-3">
-          <div class="flex items-center gap-2">
-            <button type="button" class="menu-hub-back" data-hub-back aria-label="뒤로">&larr;</button>
-            <h2 id="menu-quest-title" class="text-[15px] font-extrabold tracking-tight text-zinc-50">퀘스트</h2>
-          </div>
-        </div>
-        <div class="menu-info-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-zinc-700/50 px-4 py-10 text-center">
-          <p class="text-sm text-zinc-500">준비 중...</p>
-        </div>
-      </div>
-
-      <!-- 뽑기 패널 -->
-      <div
-        id="menu-gacha-panel"
-        class="flex w-[min(18rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-zinc-500/45 bg-zinc-700/92 text-zinc-200 shadow-xl shadow-black/40 ring-1 ring-zinc-400/25"
-        role="region"
-        aria-labelledby="menu-gacha-title"
-        aria-hidden="true"
-      >
-        <div class="border-b border-zinc-500/35 bg-zinc-600/35 px-4 py-3">
-          <div class="flex items-center gap-2">
-            <button type="button" class="menu-hub-back" data-hub-back aria-label="뒤로">&larr;</button>
-            <h2 id="menu-gacha-title" class="text-[15px] font-extrabold tracking-tight text-zinc-50">뽑기</h2>
-          </div>
-        </div>
-        <div class="gacha-scroll min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-zinc-700/50 px-3 py-3">
-          <div class="gacha-machine" aria-live="polite">
-            <div id="gacha-stage" class="gacha-stage" data-rarity="idle">
-              <div class="gacha-glow" aria-hidden="true"></div>
-              <div id="gacha-result-icon" class="gacha-result-icon" aria-hidden="true">
-                <span>?</span>
+          <div class="profile-panel-body">
+            <div id="profile-view">
+              <div id="profile-view-name" class="profile-view-name">플레이어</div>
+              <button type="button" id="profile-level-open" class="profile-level-open" aria-label="레벨 보상">
+                <span class="profile-view-meta">
+                  <span id="profile-view-level">Lv.1</span>
+                  <span id="profile-view-title"></span>
+                  <span id="profile-view-xp">0 / 100</span>
+                </span>
+                <span class="profile-xp-track" aria-hidden="true"><span id="profile-view-xp-fill" class="profile-xp-fill"></span></span>
+              </button>
+              <div class="profile-section">
+                <div class="profile-section-label">업적</div>
+                <div id="profile-view-achievements" class="profile-choice-list"></div>
               </div>
-              <div class="gacha-result-copy">
-                <div id="gacha-result-kicker" class="gacha-result-kicker">장신구 뽑기</div>
-                <div id="gacha-result-title" class="gacha-result-title">75토큰으로 1회 뽑기</div>
-                <p id="gacha-result-desc" class="gacha-result-desc">토큰 또는 머리 장신구를 얻을 수 있어요.</p>
+              <div class="profile-section">
+                <div class="profile-section-label">최고 기록</div>
+                <div id="profile-view-records" class="profile-choice-list"></div>
               </div>
             </div>
-            <button id="gacha-draw-button" type="button" class="gacha-draw-button">
-              <span>1회 뽑기</span>
-              <strong>75 토큰</strong>
-            </button>
-            <div id="gacha-owned-summary" class="gacha-owned-summary">보유 장신구 0/6</div>
+            <div id="profile-rewards">
+              <div id="profile-reward-list" class="profile-choice-list"></div>
+            </div>
+            <div id="profile-edit">
+              <label class="profile-field">
+                <span>이름</span>
+                <input id="profile-name-input" class="profile-name-input" type="text" maxlength="10" autocomplete="off" spellcheck="false" placeholder="이름">
+                <button type="button" id="profile-name-confirm" class="profile-name-confirm" disabled>확인</button>
+                <p id="profile-name-note" class="profile-name-note" hidden>토큰이 부족합니다</p>
+              </label>
+              <div class="profile-section">
+                <div class="profile-section-label">배경</div>
+                <div id="profile-backgrounds" class="profile-choice-list"></div>
+              </div>
+              <div class="profile-section">
+                <div class="profile-section-label">업적 <span>3개까지</span></div>
+                <div id="profile-achievements" class="profile-choice-list"></div>
+              </div>
+              <div class="profile-section">
+                <div class="profile-section-label">최고 기록 <span>2개까지</span></div>
+                <div id="profile-records" class="profile-choice-list"></div>
+              </div>
+            </div>
           </div>
-          <div class="gacha-rates" aria-label="뽑기 확률">
-            <div><span>30%</span><strong>30토큰</strong></div>
-            <div><span>15%</span><strong>75토큰</strong></div>
-            <div><span>5%</span><strong>300토큰</strong></div>
-            <div><span>50%</span><strong class="grade-common">일반 장신구</strong></div>
-          </div>
-          <p class="gacha-duplicate-note">중복 일반 장신구는 75토큰으로 바뀝니다. 한정판은 일반 뽑기에서 나오지 않습니다.</p>
         </div>
       </div>
     </div>
@@ -941,9 +1065,25 @@
   </div>
 </div>
 
+<div id="profile-name-prompt" class="profile-name-prompt" hidden>
+  <div class="profile-name-card" role="dialog" aria-modal="true" aria-labelledby="profile-name-prompt-title">
+    <h2 id="profile-name-prompt-title">이름</h2>
+    <p>게임에 쓸 이름을 정해주세요.</p>
+    <input id="profile-name-prompt-input" class="profile-name-input" type="text" maxlength="10" autocomplete="off" spellcheck="false" placeholder="이름">
+    <div class="profile-name-prompt-actions">
+      <button type="button" id="profile-name-prompt-cancel">취소</button>
+      <button type="button" id="profile-name-prompt-ok">확인</button>
+    </div>
+  </div>
+</div>
+<div id="profile-ach-tip" class="profile-ach-tip" hidden></div>
+<div id="profile-bg-tip" class="profile-bg-tip" hidden>
+  <img id="profile-bg-tip-img" class="profile-bg-tip-img" alt="">
+</div>
+
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="skins.js?v=20261018-noskin" defer></script>
 <script src="online.js?v=20260709-mobileui2" defer></script>
-<script src="main.js?v=20261018-hardzone" defer></script>
+<script src="main.js?v=20261019-rare2" defer></script>
 </body>
 </html>
