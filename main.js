@@ -577,8 +577,6 @@ let maxComboThisRun = 0;
 let comboBonusPointsThisRun = 0;
 /** 연속으로 한 판 최종 점수가 정확히 7점인 횟수 (행운아) */
 let consecutiveExactSevenGames = 0;
-/** 연속으로 한 판 최종 점수가 5를 넘는 제곱수인 횟수 (제제곱수) */
-let consecutiveSquareScoreGames = 0;
 /** 본편 한 판에서 움직이는 장애물 연속 통과 횟수 (무브먼트) */
 let consecutiveMovingObsPasses = 0;
 /** 로그라이크: 한 장애물에서 한 번에 얻은 최대 점수 (인생은 한방) */
@@ -587,7 +585,7 @@ let practicePlayMsSession = 0;
 let practicePlayMsLastSaveAt = 0;
 /** 본편: 첫 점수 획득 시 고정된 반(왼/오), 통행금지 업적 */
 let halfLaneLock = null;
-/** 본편: 반대편에 머문 누적 ms (2초까지 허용) */
+/** 본편: 반대편에 머문 누적 ms (1초까지 허용) */
 let wrongHalfAccumMs = 0;
 /** 본편 한 판에서 D키 조향 입력이 있었는지 ("A"ce 업적) */
 let mainRunSteerDUsed = false;
@@ -2414,7 +2412,7 @@ const TUTORIAL_CHAOS_P2_MS = 3500;
 /** 로그라이크 튜토리얼: 단계당 안내 시간 */
 const TUTORIAL_ROGUE_PHASE_MS = 7000;
 /** 업적 통행금지: 반대편 체류 허용 상한(ms) */
-const ACHIEVEMENT_HALF_LANE_GRACE_MS = 2000;
+const ACHIEVEMENT_HALF_LANE_GRACE_MS = 1000;
 
 /** intro(3초) → play → complete */
 let tutorialStep2State = 'intro';
@@ -3668,19 +3666,6 @@ function refreshAchievementsFromStorage() {
   updateAchievementsProgressUi();
 }
 
-/** 본편 최종 점수가 0보다 크고 완전제곱수(1,4,9,16,…)인지 — 부동소수 오차 허용 */
-function isPerfectSquareFinalScore(fs) {
-  if (!Number.isFinite(fs) || fs <= 0) return false;
-  const root = Math.sqrt(fs);
-  const k = Math.round(root);
-  return k >= 1 && Math.abs(k * k - fs) < 1e-3;
-}
-
-/** 제제곱수 업적: 5를 넘는 완전제곱수(9,16,25,…) */
-function isSquareScoreAboveFive(fs) {
-  return isPerfectSquareFinalScore(fs) && fs > 5;
-}
-
 /** 본편 게임 오버 시 호출 (튜토리얼 제외) */
 function checkAchievementsAfterRun(finalScore, maxCombo, comboBonusTotal) {
   const fs = typeof finalScore === 'number' ? finalScore : 0;
@@ -3707,12 +3692,6 @@ function checkAchievementsAfterRun(finalScore, maxCombo, comboBonusTotal) {
       consecutiveExactSevenGames = 0;
     }
   }
-  if (isSquareScoreAboveFive(fs)) {
-    consecutiveSquareScoreGames += 1;
-    if (consecutiveSquareScoreGames >= 3) unlockAchievement('square_streak_3');
-  } else {
-    consecutiveSquareScoreGames = 0;
-  }
   if (
     fs >= 25 &&
     halfLaneLock !== null &&
@@ -3726,6 +3705,9 @@ function checkAchievementsAfterRun(finalScore, maxCombo, comboBonusTotal) {
     const r44 = Math.round(fs * 10) / 10;
     if (gameMode === 'normal' && Number.isFinite(fs) && r44 === 44) unlockAchievement('devil_44');
     if (gameMode === 'hard' && Number.isFinite(fs) && r44 === 44) unlockAchievement('archdevil_44_hard');
+  }
+  if (gameMode === 'hard' && fs >= 100 && countDeactivatedRelics() >= 4) {
+    unlockAchievement('pure_skill');
   }
   checkExtraAchievements();
 }
