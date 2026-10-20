@@ -126,6 +126,30 @@ function updatePortraitPrompt() {
   else overlay.classList.remove('is-active');
 }
 
+function loadedBuildId() {
+  const meta = document.querySelector('meta[name="snakombo-build"]');
+  return meta ? String(meta.getAttribute('content') || '').trim() : '';
+}
+
+function showUpdateRequired() {
+  const overlay = document.getElementById('update-required-overlay');
+  if (!overlay) return;
+  overlay.classList.add('is-active');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+
+function checkForUpdate() {
+  const current = loadedBuildId();
+  if (!current) return;
+  fetch('version.txt?t=' + Date.now(), { cache: 'no-store' })
+    .then(function (res) { return res.ok ? res.text() : ''; })
+    .then(function (text) {
+      const remote = String(text || '').trim();
+      if (remote && remote !== current) showUpdateRequired();
+    })
+    .catch(function () {});
+}
+
 const LOADING_MIN_MS = 1250;
 const loadingShownAtMs = performance.now();
 let loadingReady = false;
@@ -431,7 +455,49 @@ let nextRunIsLocal = false;
 const LOCAL_SPEED_MULT = 0.9; // 10% slower (base + increment)
 const LOCAL_TURN_MULT = 0.9; // 10% slower turning
 const LOCAL_SPAWN_RATE_MULT = 1.75; // obstacles spawn 1.75x faster
-const LOCAL_WIN_SCORE = 30;
+const LOCAL_WIN_SCORE = 50;
+let multiRules = { winScore: 50, gems: false, mode: 'normal' };
+let localDeadWhite = false;
+let localDeadGray = false;
+
+function paceMode() {
+  if (gameMode === 'multi') {
+    if (multiRules.mode === 'hard' || multiRules.mode === 'chaos') return multiRules.mode;
+    return 'normal';
+  }
+  return gameMode;
+}
+
+function multiWinScore() {
+  const n = Number(multiRules.winScore);
+  return n === 75 || n === 100 ? n : 50;
+}
+
+function applyMultiRules(raw) {
+  const win = Number(raw && raw.win);
+  multiRules.winScore = win === 75 || win === 100 ? win : 50;
+  multiRules.gems = !!(raw && (raw.gems === true || raw.gems === 1 || raw.gems === '1'));
+  const mode = raw && raw.mode;
+  multiRules.mode = mode === 'hard' || mode === 'chaos' ? mode : 'normal';
+}
+
+function paintRoomRules() {
+  const modeName = multiRules.mode === 'hard' ? '하드' : multiRules.mode === 'chaos' ? '혼돈' : '일반';
+  const values = {
+    win: multiWinScore() + '점',
+    gems: multiRules.gems ? '예' : '아니요',
+    mode: modeName
+  };
+  Object.keys(values).forEach(function (key) {
+    document.querySelectorAll('[data-room-rule="' + key + '"]').forEach(function (el) {
+      el.textContent = values[key];
+      if (key === 'mode') {
+        el.classList.remove('is-normal', 'is-hard', 'is-chaos');
+        el.classList.add(multiRules.mode === 'hard' ? 'is-hard' : multiRules.mode === 'chaos' ? 'is-chaos' : 'is-normal');
+      }
+    });
+  });
+}
 
 let localWinner = null; // 'white' | 'gray' | null
 let localWinReason = ''; // 'death' | 'score'
@@ -465,7 +531,7 @@ const MOVING_OBS_SCORE_THRESHOLD_BOOST = 20;
 const MOVING_OBS_BASE_CHANCE = 0.15;
 const MOVING_OBS_BASE_CHANCE_HARD = 0.25;
 const MOVING_OBS_CHANCE_STEP = 0.01;
-const MOVING_OBS_SPEED_MULT = 1.35;
+const MOVING_OBS_SPEED_MULT = 1.35 * 1.25;
 /** 벽·다른 장애물과 유지할 최소 간격(머리 너비×2, 여유 포함) */
 const MOVING_OBS_CLEARANCE = HEAD_WIDTH * 2 + 2;
 /** 왕복 경로로 쓸 수 있는 최소·최대 길이(고정 거리) */
@@ -482,13 +548,13 @@ function runCountsForRecords() {
 
 function getRunBaseSpeed() {
   if (gameMode === 'practice') return BASE_SPEED * 0.72 * practiceSettings.speedMult;
-  if (gameMode === 'hard') return BASE_SPEED * 1.35;
-  if (gameMode === 'chaos') return BASE_SPEED * CHAOS_MODE_MULT;
+  if (paceMode() === 'hard') return BASE_SPEED * 1.35 * (localPlayEnabled ? LOCAL_SPEED_MULT : 1);
+  if (paceMode() === 'chaos') return BASE_SPEED * CHAOS_MODE_MULT * (localPlayEnabled ? LOCAL_SPEED_MULT : 1);
   if (gameMode === 'roguelike') {
     return BASE_SPEED * NORMAL_MODE_MULT * ROGUE_START_SPEED_MULT * rogueSpeedMult * rogueComboSpeedFactor();
   }
   const base = BASE_SPEED;
-  const normalMult = gameMode === 'normal' ? NORMAL_MODE_MULT : 1;
+  const normalMult = paceMode() === 'normal' ? NORMAL_MODE_MULT : 1;
   return localPlayEnabled ? base * LOCAL_SPEED_MULT * normalMult : base * normalMult;
 }
 
@@ -496,10 +562,10 @@ function getRunSpeedIncrement() {
   // 연습 모드: 시간 경과로 속도 증가 없음
   if (gameMode === 'practice') return 0;
   if (gameMode === 'roguelike') return 0; // 속도 상승은 증강으로만
-  if (gameMode === 'hard') return SPEED_INCREMENT * 1.35;
-  if (gameMode === 'chaos') return SPEED_INCREMENT * CHAOS_MODE_MULT;
+  if (paceMode() === 'hard') return SPEED_INCREMENT * 1.35;
+  if (paceMode() === 'chaos') return SPEED_INCREMENT * CHAOS_MODE_MULT;
   const inc = SPEED_INCREMENT;
-  const normalMult = gameMode === 'normal' ? NORMAL_MODE_MULT : 1;
+  const normalMult = paceMode() === 'normal' ? NORMAL_MODE_MULT : 1;
   return localPlayEnabled ? inc * LOCAL_SPEED_MULT * normalMult : inc * normalMult;
 }
 
@@ -517,7 +583,7 @@ function getSpawnParamsForMode() {
       ramp: 0
     });
   }
-  if (gameMode === 'hard') {
+  if (paceMode() === 'hard') {
     return applyMult({
       // 하드: 생성 속도(빈도) 35% 증가 = 간격 1/1.35
       start: SPAWN_INTERVAL_START / 1.35,
@@ -525,7 +591,7 @@ function getSpawnParamsForMode() {
       ramp: SPAWN_INTERVAL_RAMP / 1.35
     });
   }
-  if (gameMode === 'chaos') {
+  if (paceMode() === 'chaos') {
     return applyMult({
       // 혼돈: 이동/회전/장애물 생성이 일반보다 20% 빠름
       start: SPAWN_INTERVAL_START / CHAOS_MODE_MULT,
@@ -643,6 +709,8 @@ let chaosDebuffs = new Set();
 let chaosDebuffsPicked = [];
 let runSegmentDist = SEGMENT_DIST;
 let chaosTurnVel = 0;
+let chaosTurnVelGray = 0;
+let chaosTurnHoldMsGray = 0;
 let chaosTurnHoldMs = 0;
 let chaosIntroUntil = 0;
 let chaosIntroWasActive = false;
@@ -1087,12 +1155,12 @@ const ROGUE_AUGMENTS = [
   {
     id: 'score', cat: 'offense', name: '예리',
     levels: [
-      { desc: ['통과 기본 점수 ', { h: '+0.6' }],
-        apply() { rogueBaseScoreBonus += 0.6; } },
-      { desc: ['통과 기본 점수 ', { h: '+1.2' }],
-        apply() { rogueBaseScoreBonus += 1.2; } },
-      { desc: ['통과 기본 점수 ', { h: '+2.4' }],
-        apply() { rogueBaseScoreBonus += 2.4; } }
+      { desc: ['통과 기본 점수 ', { h: '+0.5' }],
+        apply() { rogueBaseScoreBonus += 0.5; } },
+      { desc: ['통과 기본 점수 ', { h: '+1' }],
+        apply() { rogueBaseScoreBonus += 1; } },
+      { desc: ['통과 기본 점수 ', { h: '+2' }],
+        apply() { rogueBaseScoreBonus += 2; } }
     ]
   },
   {
@@ -1100,10 +1168,10 @@ const ROGUE_AUGMENTS = [
     levels: [
       { desc: [{ h: '15%' }, ' 확률로 점수 ', { h: '×2' }, ' 장애물 소환'],
         apply() { rogueBonusChance += 0.15; rogueBonusMult = 2; } },
-      { desc: ['소환 확률 ', { h: '+8%' }, ', 점수 배율 ', { h: '×2.5' }],
-        apply() { rogueBonusChance += 0.08; rogueBonusMult = 2.5; } },
-      { desc: ['소환 확률 ', { h: '+12%' }, ', 점수 배율 ', { h: '×3.5' }],
-        apply() { rogueBonusChance += 0.12; rogueBonusMult = 3.5; } }
+      { desc: ['소환 확률 ', { h: '+7.5%' }, ', 점수 배율 ', { h: '×2.5' }],
+        apply() { rogueBonusChance += 0.075; rogueBonusMult = 2.5; } },
+      { desc: ['소환 확률 ', { h: '+7.5%' }, ', 점수 배율 ', { h: '×3.5' }],
+        apply() { rogueBonusChance += 0.075; rogueBonusMult = 3.5; } }
     ]
   },
   {
@@ -1149,12 +1217,12 @@ const ROGUE_AUGMENTS = [
   {
     id: 'shield', cat: 'heal', name: '보호막',
     levels: [
+      { desc: ['선택마다 보호막 ', { h: '1회' }],
+        apply() { rogueShieldMax = 1; } },
       { desc: ['선택마다 보호막 ', { h: '2회' }],
         apply() { rogueShieldMax = 2; } },
-      { desc: ['선택마다 보호막 ', { h: '3회' }],
-        apply() { rogueShieldMax = 3; } },
-      { desc: ['선택마다 보호막 ', { h: '4회' }, ', 소모 시 최대 게이지 ', { h: '5% 회복' }],
-        apply() { rogueShieldMax = 4; rogueShieldHeal = 0.05; } }
+      { desc: ['선택마다 보호막 ', { h: '3회' }, ', 소모 시 최대 게이지 ', { h: '5% 회복' }],
+        apply() { rogueShieldMax = 3; rogueShieldHeal = 0.05; } }
     ]
   },
   {
@@ -1204,12 +1272,12 @@ const ROGUE_AUGMENTS = [
   {
     id: 'counter', cat: 'offense', name: '역습',
     levels: [
-      { desc: ['피격 후 ', { h: '1초' }, '간 모든 점수 ', { h: '1.3배' }],
-        apply() { rogueCounterDurationMs = 1000; rogueCounterMult = 1.3; } },
-      { desc: ['피격 후 ', { h: '1초' }, '간 모든 점수 ', { h: '1.7배' }],
-        apply() { rogueCounterDurationMs = 1000; rogueCounterMult = 1.7; } },
       { desc: ['피격 후 ', { h: '1.5초' }, '간 모든 점수 ', { h: '2배' }],
-        apply() { rogueCounterDurationMs = 1500; rogueCounterMult = 2; } }
+        apply() { rogueCounterDurationMs = 1500; rogueCounterMult = 2; } },
+      { desc: ['피격 후 ', { h: '1.5초' }, '간 모든 점수 ', { h: '2.5배' }],
+        apply() { rogueCounterDurationMs = 1500; rogueCounterMult = 2.5; } },
+      { desc: ['피격 후 ', { h: '1.5초' }, '간 모든 점수 ', { h: '3배' }],
+        apply() { rogueCounterDurationMs = 1500; rogueCounterMult = 3; } }
     ]
   },
   {
@@ -1224,12 +1292,12 @@ const ROGUE_AUGMENTS = [
   {
     id: 'sniper', cat: 'offense', name: '저격',
     levels: [
-      { desc: ['가장 먼 ', { h: '0.5점 구간' }, ' 무득점, 장애물을 지날 때 점수 ', { h: '×1.3' }],
-        apply() { rogueSniperMaxRatio = 3; rogueSniperMult = 1.3; } },
-      { desc: [{ h: '1점 구간' }, '까지 무득점, 장애물을 지날 때 점수 ', { h: '×1.5' }],
-        apply() { rogueSniperMaxRatio = 2; rogueSniperMult = 1.5; } },
-      { desc: ['장애물을 지날 때 점수 ', { h: '×1.8' }, ', 통과 시 ', { h: '35%' }, ' 확률로 콤보 ', { h: '+2' }],
-        apply() { rogueSniperMaxRatio = 2; rogueSniperMult = 1.8; rogueSniperComboDoubleP = 0.35; } }
+      { desc: ['가장 먼 ', { h: '0.5점 구간' }, ' 무득점, 장애물을 지날 때 점수 ', { h: '×1.5' }],
+        apply() { rogueSniperMaxRatio = 3; rogueSniperMult = 1.5; } },
+      { desc: [{ h: '1점 구간' }, '까지 무득점, 장애물을 지날 때 점수 ', { h: '×1.7' }],
+        apply() { rogueSniperMaxRatio = 2; rogueSniperMult = 1.7; } },
+      { desc: ['장애물을 지날 때 점수 ', { h: '×2' }, ', 통과 시 ', { h: '40%' }, ' 확률로 콤보 ', { h: '+2' }],
+        apply() { rogueSniperMaxRatio = 2; rogueSniperMult = 2; rogueSniperComboDoubleP = 0.40; } }
     ]
   }
 ];
@@ -1312,19 +1380,19 @@ function rogueBuildEnhancedChoice(base, level) {
   if (id === 'score') {
     if (level === 1) {
       return {
-        desc: ['통과 기본 점수 ', g('+0.7')],
-        apply() { rogueBaseScoreBonus += 0.7; }
+        desc: ['통과 기본 점수 ', g('+0.6')],
+        apply() { rogueBaseScoreBonus += 0.6; }
       };
     }
     if (level === 2) {
       return {
-        desc: ['통과 기본 점수 ', g('+1.4')],
-        apply() { rogueBaseScoreBonus += 1.4; }
+        desc: ['통과 기본 점수 ', g('+1.2')],
+        apply() { rogueBaseScoreBonus += 1.2; }
       };
     }
     return {
-      desc: ['통과 기본 점수 ', g('+2.9')],
-      apply() { rogueBaseScoreBonus += 2.9; }
+      desc: ['통과 기본 점수 ', g('+2.4')],
+      apply() { rogueBaseScoreBonus += 2.4; }
     };
   }
 
@@ -1337,13 +1405,13 @@ function rogueBuildEnhancedChoice(base, level) {
     }
     if (level === 2) {
       return {
-        desc: ['소환 확률 ', g('+10%'), ', 점수 배율 ', { h: '×2.5' }],
-        apply() { rogueBonusChance += 0.10; rogueBonusMult = 2.5; }
+        desc: ['소환 확률 ', g('+9%'), ', 점수 배율 ', { h: '×2.5' }],
+        apply() { rogueBonusChance += 0.09; rogueBonusMult = 2.5; }
       };
     }
     return {
-      desc: ['소환 확률 ', g('+14%'), ', 점수 배율 ', { h: '×3.5' }],
-      apply() { rogueBonusChance += 0.14; rogueBonusMult = 3.5; }
+      desc: ['소환 확률 ', g('+9%'), ', 점수 배율 ', { h: '×3.5' }],
+      apply() { rogueBonusChance += 0.09; rogueBonusMult = 3.5; }
     };
   }
 
@@ -1437,19 +1505,19 @@ function rogueBuildEnhancedChoice(base, level) {
   if (id === 'counter') {
     if (level === 1) {
       return {
-        desc: ['피격 후 ', g('1.2초'), '간 모든 점수 ', g('1.4배')],
-        apply() { rogueCounterDurationMs = 1200; rogueCounterMult = 1.4; }
+        desc: ['피격 후 ', g('1.8초'), '간 모든 점수 ', g('2.4배')],
+        apply() { rogueCounterDurationMs = 1800; rogueCounterMult = 2.4; }
       };
     }
     if (level === 2) {
       return {
-        desc: ['피격 후 ', g('1.2초'), '간 모든 점수 ', g('1.9배')],
-        apply() { rogueCounterDurationMs = 1200; rogueCounterMult = 1.9; }
+        desc: ['피격 후 ', g('1.8초'), '간 모든 점수 ', g('3배')],
+        apply() { rogueCounterDurationMs = 1800; rogueCounterMult = 3; }
       };
     }
     return {
-      desc: ['피격 후 ', g('1.8초'), '간 모든 점수 ', g('2.2배')],
-      apply() { rogueCounterDurationMs = 1800; rogueCounterMult = 2.2; }
+      desc: ['피격 후 ', g('1.8초'), '간 모든 점수 ', g('3.6배')],
+      apply() { rogueCounterDurationMs = 1800; rogueCounterMult = 3.6; }
     };
   }
 
@@ -2129,13 +2197,13 @@ function drawRogueAugmentOverlay(ctx) {
 }
 
 function chaosHasDebuff(id) {
-  return gameMode === 'chaos' && chaosDebuffs && chaosDebuffs.has(id);
+  return paceMode() === 'chaos' && chaosDebuffs && chaosDebuffs.has(id);
 }
 
 function pickChaosDebuffsForRun() {
   chaosDebuffs = new Set();
   chaosDebuffsPicked = [];
-  if (gameMode !== 'chaos') return;
+  if (paceMode() !== 'chaos') return;
   const pool = CHAOS_DEBUFF_POOL.slice();
   for (let i = pool.length - 1; i > 0; i--) {
     const j = (Math.random() * (i + 1)) | 0;
@@ -2191,7 +2259,7 @@ function drawChaosDebuffHud(ctx, nowMs, { dimBackground }) {
   const line2 = '- ' + (bLabel || '-');
   const line3 = '- ' + (cLabel || '-');
 
-  const introActive = gameMode === 'chaos' && chaosIntroUntil > 0 && nowMs < chaosIntroUntil;
+  const introActive = paceMode() === 'chaos' && chaosIntroUntil > 0 && nowMs < chaosIntroUntil;
   const transitionStart = Math.max(0, chaosIntroUntil - 900);
   const tr =
     chaosIntroUntil > 0
@@ -2544,7 +2612,7 @@ function createObstacleShape() {
 
 function getMinGapForMode() {
   // 하드: 장애물 간격을 3.5머리로 더 촘촘하게
-  if (gameMode === 'hard') return HEAD_WIDTH * 3.5;
+  if (paceMode() === 'hard') return HEAD_WIDTH * 3.5;
   if (chaosHasDebuff('tight_gap')) return HEAD_WIDTH * 3;
   return MIN_GAP;
 }
@@ -2561,7 +2629,7 @@ function getMovingObstacleScoreThreshold() {
 function getMovingObstacleSpawnChance(runScore) {
   const threshold = getMovingObstacleScoreThreshold();
   if (runScore < threshold) return 0;
-  const base = gameMode === 'hard' ? MOVING_OBS_BASE_CHANCE_HARD : MOVING_OBS_BASE_CHANCE;
+  const base = paceMode() === 'hard' ? MOVING_OBS_BASE_CHANCE_HARD : MOVING_OBS_BASE_CHANCE;
   return Math.min(
     1,
     base + Math.floor((runScore - threshold) / 5) * MOVING_OBS_CHANCE_STEP
@@ -2772,6 +2840,11 @@ function pickMovingObstacleTravel(baseX, baseY, circles, otherObsList) {
     return pickMovingObstacleTravelFallback(baseX, baseY, circles, ux, uy, otherObsList);
   };
 
+  for (let i = 0; i < 24; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const seg = tryDir(Math.cos(angle), Math.sin(angle));
+    if (seg) return seg;
+  }
   const cardinals = [
     [1, 0],
     [-1, 0],
@@ -2786,12 +2859,6 @@ function pickMovingObstacleTravel(baseX, baseY, circles, otherObsList) {
   }
   for (const [ux, uy] of cardinals) {
     const seg = tryDir(ux, uy);
-    if (seg) return seg;
-  }
-
-  for (let i = 0; i < 24; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const seg = tryDir(Math.cos(angle), Math.sin(angle));
     if (seg) return seg;
   }
   return null;
@@ -2940,12 +3007,7 @@ function findObstacleSpawnPosition(circles, minGapToObs) {
 }
 
 function countObstaclesOnField() {
-  let n = 0;
-  for (const obs of staticObs) {
-    if (obs.fadeOut > 0) continue;
-    n++;
-  }
-  return n;
+  return staticObs.length;
 }
 
 function commitMovingObstacle(pos, circles, travel) {
@@ -3211,7 +3273,7 @@ function checkCollision(hx, hy, ccx, ccy, cr) {
   const dx = hx - ccx;
   const dy = hy - ccy;
   let forgive = chaosHasDebuff('tight_collision') ? 0 : 4;
-  if (gameMode === 'hard') forgive *= 0.5;
+  if (paceMode() === 'hard') forgive *= 0.5;
   if (IS_MOBILE) forgive *= 1.2;
   const r = HEAD_RADIUS + cr - forgive;
   return (dx * dx + dy * dy) < (r * r);
@@ -3325,7 +3387,7 @@ function triggerGameOver(cause) {
   if (!tutorialMode && gameMode !== 'practice' && gameMode !== 'roguelike') {
     checkAchievementsAfterRun(score, maxComboThisRun, comboBonusPointsThisRun);
   }
-  // 토큰: 일반/하드/혼돈은 점수 기반, 로그라이크는 초당 1.5. 연습·멀티는 주지 않음. 지급량은 반올림 정수.
+  // 토큰: 일반/하드/혼돈은 점수 기반, 로그라이크는 2초당 1. 연습·멀티는 주지 않음. 지급량은 반올림 정수.
   if (!tutorialMode && gameMode !== 'practice' && gameMode !== 'multi') {
     grantRunTokens(calcTokenGain(score, tokenPlayMs));
   }
@@ -3343,15 +3405,27 @@ function triggerLocalWin(winner, reason) {
   paused = false;
 }
 
+function finishLocalByScore() {
+  if (localWinner) return;
+  if (score > localScoreGrayValue) triggerLocalWin('white', 'both');
+  else if (localScoreGrayValue > score) triggerLocalWin('gray', 'both');
+  else triggerLocalWin('draw', 'both');
+}
+
 function triggerLocalDeath(victim, cause) {
   if (!localPlayEnabled) {
     triggerGameOver(cause);
     return;
   }
   if (localWinner) return;
-  if (victim === 'white') triggerLocalWin('gray', 'death');
-  else if (victim === 'gray') triggerLocalWin('white', 'death');
-  else triggerLocalWin('white', 'death');
+  if (victim === 'gray') {
+    if (localDeadGray) return;
+    localDeadGray = true;
+  } else {
+    if (localDeadWhite) return;
+    localDeadWhite = true;
+  }
+  if (localDeadWhite && localDeadGray) finishLocalByScore();
 }
 
 const HIGH_SCORE_KEY_LEGACY = 'snakombo_high_score';
@@ -3444,6 +3518,7 @@ const PLAY_COUNT_KEY = 'snakombo_play_count';
 const PLAY_COUNT_KEY_NORMAL = 'snakombo_play_count_normal_v1';
 const PLAY_COUNT_KEY_HARD = 'snakombo_play_count_hard_v1';
 const PLAY_COUNT_KEY_CHAOS = 'snakombo_play_count_chaos_v1';
+const PLAY_COUNT_KEY_ROGUE = 'snakombo_play_count_rogue_v1';
 
 function getPlayCount() {
   try {
@@ -3469,6 +3544,25 @@ function getModePlayCount(mode) {
   } catch {
     return 0;
   }
+}
+
+function getRoguePlayCount() {
+  try {
+    const n = parseInt(localStorage.getItem(PLAY_COUNT_KEY_ROGUE), 10);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function incrementRoguePlayCount() {
+  const n = getRoguePlayCount() + 1;
+  try { localStorage.setItem(PLAY_COUNT_KEY_ROGUE, String(n)); } catch (_) {}
+  return n;
+}
+
+function getTotalPlayCount() {
+  return getModePlayCount('normal') + getModePlayCount('hard') + getModePlayCount('chaos') + getRoguePlayCount();
 }
 
 function incrementPlayCount() {
@@ -3609,12 +3703,12 @@ function reorderAchievementCards() {
     return c.classList.contains('achievement-done');
   };
   const ordered = []
-    .concat(cards.filter(function (c) { return normal(c) && done(c); }))
-    .concat(cards.filter(function (c) { return normal(c) && !done(c); }))
-    .concat(cards.filter(function (c) { return rare(c) && done(c); }))
-    .concat(cards.filter(function (c) { return rare(c) && !done(c); }))
-    .concat(cards.filter(function (c) { return hidden(c) && done(c); }))
-    .concat(cards.filter(function (c) { return hidden(c) && !done(c); }));
+    .concat(cards.filter(function (c) { return done(c) && normal(c); }))
+    .concat(cards.filter(function (c) { return done(c) && rare(c); }))
+    .concat(cards.filter(function (c) { return done(c) && hidden(c); }))
+    .concat(cards.filter(function (c) { return !done(c) && normal(c); }))
+    .concat(cards.filter(function (c) { return !done(c) && rare(c); }))
+    .concat(cards.filter(function (c) { return !done(c) && hidden(c); }));
   const frag = document.createDocumentFragment();
   ordered.forEach(function (el) {
     frag.appendChild(el);
@@ -3706,7 +3800,13 @@ function checkAchievementsAfterRun(finalScore, maxCombo, comboBonusTotal) {
     if (gameMode === 'normal' && Number.isFinite(fs) && r44 === 44) unlockAchievement('devil_44');
     if (gameMode === 'hard' && Number.isFinite(fs) && r44 === 44) unlockAchievement('archdevil_44_hard');
   }
-  if (gameMode === 'hard' && fs >= 100 && countDeactivatedRelics() >= 4) {
+  if (
+    gameMode === 'hard' &&
+    fs >= 100 &&
+    typeof RELIC_DEFS !== 'undefined' &&
+    RELIC_DEFS.length > 0 &&
+    countDeactivatedRelics() >= RELIC_DEFS.length
+  ) {
     unlockAchievement('pure_skill');
   }
   checkExtraAchievements();
@@ -3929,6 +4029,8 @@ function resetSnake() {
   localScoreGrayValue = 0;
   localWinner = null;
   localWinReason = '';
+  localDeadWhite = false;
+  localDeadGray = false;
   localWinTimeSec = null;
   gameOver = false;
   paused = false;
@@ -4197,9 +4299,11 @@ document.addEventListener('keydown', e => {
       runSegmentDist = SEGMENT_DIST;
       chaosTurnVel = 0;
       chaosTurnHoldMs = 0;
-      chaosIntroStartMs = gameMode === 'chaos' ? performance.now() : 0;
-      chaosIntroUntil = gameMode === 'chaos' ? (chaosIntroStartMs + 3000) : 0;
-      chaosIntroWasActive = gameMode === 'chaos' && chaosIntroUntil > 0;
+      chaosTurnVelGray = 0;
+      chaosTurnHoldMsGray = 0;
+      chaosIntroStartMs = paceMode() === 'chaos' ? performance.now() : 0;
+      chaosIntroUntil = paceMode() === 'chaos' ? (chaosIntroStartMs + 3000) : 0;
+      chaosIntroWasActive = paceMode() === 'chaos' && chaosIntroUntil > 0;
       resetSnake();
     } else if (
       gameRunning &&
@@ -4231,9 +4335,11 @@ function restartRunFromOverlay() {
   runSegmentDist = SEGMENT_DIST;
   chaosTurnVel = 0;
   chaosTurnHoldMs = 0;
-  chaosIntroStartMs = gameMode === 'chaos' ? performance.now() : 0;
-  chaosIntroUntil = gameMode === 'chaos' ? (chaosIntroStartMs + 3000) : 0;
-  chaosIntroWasActive = gameMode === 'chaos' && chaosIntroUntil > 0;
+  chaosTurnVelGray = 0;
+  chaosTurnHoldMsGray = 0;
+  chaosIntroStartMs = paceMode() === 'chaos' ? performance.now() : 0;
+  chaosIntroUntil = paceMode() === 'chaos' ? (chaosIntroStartMs + 3000) : 0;
+  chaosIntroWasActive = paceMode() === 'chaos' && chaosIntroUntil > 0;
   resetSnake();
 }
 
@@ -4672,7 +4778,7 @@ function animate() {
     tutorialFreeze = true;
   }
   const chaosIntroActive =
-    !tutorialMode && gameMode === 'chaos' && chaosIntroUntil > 0 && performance.now() < chaosIntroUntil;
+    !tutorialMode && paceMode() === 'chaos' && chaosIntroUntil > 0 && performance.now() < chaosIntroUntil;
   if (chaosIntroWasActive && !chaosIntroActive) {
     // 인트로(3초) 종료 시점부터 본격 시간 측정 시작
     scoreStart = performance.now();
@@ -4752,9 +4858,9 @@ function animate() {
       (gameMode === 'practice'
         ? practiceSettings.turnMult
         : (1 + (speedRatio - 1) * TURN_SPEED_RAMP) *
-          (gameMode === 'hard' ? 1.35 : 1) *
-          (gameMode === 'chaos' ? CHAOS_MODE_MULT : 1) *
-          (gameMode === 'normal' ? NORMAL_MODE_MULT : 1) *
+          (paceMode() === 'hard' ? 1.35 : 1) *
+          (paceMode() === 'chaos' ? CHAOS_MODE_MULT : 1) *
+          (paceMode() === 'normal' ? NORMAL_MODE_MULT : 1) *
           (isRogue() ? NORMAL_MODE_MULT * ROGUE_START_SPEED_MULT * rogueSpeedMult * rogueComboSpeedFactor() : 1) *
           (localPlayEnabled ? LOCAL_TURN_MULT : 1));
     const turnStep = currentTurn * frameFactor;
@@ -4764,7 +4870,7 @@ function animate() {
     const steerRight = keys.d;
     const whiteLeftKey = steerLeft;
     const whiteRightKey = steerRight;
-    if (chaosHasDebuff('turn_inertia')) {
+    if (!(localPlayEnabled && localDeadWhite) && chaosHasDebuff('turn_inertia')) {
       // 처음엔 둔하게 → 누르고 있을수록 정상 회전으로 복귀
       const holding = whiteLeftKey || whiteRightKey;
       chaosTurnHoldMs = clamp(
@@ -4778,20 +4884,36 @@ function animate() {
         (whiteLeftKey ? -turnStep : whiteRightKey ? turnStep : 0) * turnScale;
       chaosTurnVel += (target - chaosTurnVel) * 0.34;
       angle += chaosTurnVel;
-    } else {
+    } else if (!(localPlayEnabled && localDeadWhite)) {
       if (whiteLeftKey) angle -= turnStep;
       if (whiteRightKey) angle += turnStep;
     }
     const moveStep = currentSpeed * frameFactor;
-    points[0].x += Math.cos(angle) * moveStep;
-    points[0].y += Math.sin(angle) * moveStep;
+    if (!(localPlayEnabled && localDeadWhite)) {
+      points[0].x += Math.cos(angle) * moveStep;
+      points[0].y += Math.sin(angle) * moveStep;
+    }
 
     // Local gray snake (local mode second snake)
-    if (localPlayEnabled && localSnakeGray.points && localSnakeGray.points.length >= getRunSegmentCount()) {
+    if (localPlayEnabled && !localDeadGray && localSnakeGray.points && localSnakeGray.points.length >= getRunSegmentCount()) {
       let gLeft = keys.left;
       let gRight = keys.right;
-      if (gLeft) localSnakeGray.angle -= turnStep;
-      if (gRight) localSnakeGray.angle += turnStep;
+      if (chaosHasDebuff('turn_inertia')) {
+        const holding = gLeft || gRight;
+        chaosTurnHoldMsGray = clamp(
+          chaosTurnHoldMsGray + (holding ? frameDeltaMs : -frameDeltaMs * 2.2),
+          0,
+          520
+        );
+        const ramp = easeOutCubic(chaosTurnHoldMsGray / 520);
+        const turnScale = 0.28 + 0.72 * ramp;
+        const target = (gLeft ? -turnStep : gRight ? turnStep : 0) * turnScale;
+        chaosTurnVelGray += (target - chaosTurnVelGray) * 0.34;
+        localSnakeGray.angle += chaosTurnVelGray;
+      } else {
+        if (gLeft) localSnakeGray.angle -= turnStep;
+        if (gRight) localSnakeGray.angle += turnStep;
+      }
       localSnakeGray.points[0].x += Math.cos(localSnakeGray.angle) * moveStep;
       localSnakeGray.points[0].y += Math.sin(localSnakeGray.angle) * moveStep;
       for (let i = 1; i < getRunSegmentCount(); i++) {
@@ -4810,10 +4932,11 @@ function animate() {
 
     // Wall collision - game over if out of bounds (연습 무적: 화면 반대편으로 워프)
     if (
-      points[0].x < 0 ||
+      !(localPlayEnabled && localDeadWhite) &&
+      (points[0].x < 0 ||
       points[0].x > canvas.width ||
       points[0].y < 0 ||
-      points[0].y > canvas.height
+      points[0].y > canvas.height)
     ) {
       if (gameMode === 'practice' && practiceSettings.invincible) {
         practiceWallWrap();
@@ -4828,6 +4951,7 @@ function animate() {
     }
     if (
       localPlayEnabled &&
+      !localDeadGray &&
       localSnakeGray.points &&
       localSnakeGray.points.length >= getRunSegmentCount() &&
       (localSnakeGray.points[0].x < 0 ||
@@ -4861,7 +4985,7 @@ function animate() {
     }
 
     // Check collision with static obstacles
-    if (!gameOver) {
+    if (!gameOver && !(localPlayEnabled && localDeadWhite)) {
       let hitFound = false;
       for (const obs of staticObs) {
         if (obs.fadeOut) continue;
@@ -4894,6 +5018,7 @@ function animate() {
     // Gray snake collision with static obstacles (local mode)
     if (
       localPlayEnabled &&
+      !localDeadGray &&
       !gameOver &&
       localSnakeGray.points &&
       localSnakeGray.points.length >= getRunSegmentCount()
@@ -4931,7 +5056,7 @@ function animate() {
             ? 1250
             : COMBO_TIMEOUT_MS) + (isRogue() ? rogueComboExtraMs : 0) + relicEchoMs();
       const dropHalfBand = chaosHasDebuff('no_half_point');
-      const scoreMaxRatio = gameMode === 'hard' ? 3.6 : (isRogue() ? rogueSniperMaxRatio : 5);
+      const scoreMaxRatio = paceMode() === 'hard' ? 3.6 : (isRogue() ? rogueSniperMaxRatio : 5);
 
       function minEdgeDistForHead(obs, hx, hy) {
         let m = Infinity;
@@ -4961,6 +5086,8 @@ function animate() {
       }
 
       function processSnakeScore(kind, hx, hy) {
+        if (kind === 'gray' && localDeadGray) return;
+        if (kind !== 'gray' && localDeadWhite) return;
         const nearKey = kind === 'gray' ? '_nearStart_g' : '_nearStart';
         const bestKey = kind === 'gray' ? '_bestScore_g' : '_bestScore';
         const isGray = kind === 'gray';
@@ -5003,14 +5130,14 @@ function animate() {
                       localComboGrayValue++;
                       localLastScoreTimeGray = nowMs;
                       const comboBonus = localComboGrayValue >= 2 ? (localComboGrayValue - 1) * 0.5 : 0;
-                      const pts = (obs[bestKey] || (dropHalfBand ? 1 : 0.5)) + comboBonus;
+                      let pts = (obs[bestKey] || (dropHalfBand ? 1 : 0.5)) + comboBonus;
+                      pts = rollRubyScore(pts).pts;
                       if (!(tutorialMode && tutorialStep === 3)) {
                         localScoreGrayValue = roundScore(localScoreGrayValue + pts);
                         if (
                           localPlayEnabled &&
                           !localWinner &&
-                          localScoreGrayValue >= LOCAL_WIN_SCORE &&
-                          score < LOCAL_WIN_SCORE
+                          localScoreGrayValue >= multiWinScore()
                         ) {
                           triggerLocalWin('gray', 'score');
                         }
@@ -5066,8 +5193,7 @@ function animate() {
                         if (
                           localPlayEnabled &&
                           !localWinner &&
-                          score >= LOCAL_WIN_SCORE &&
-                          localScoreGrayValue < LOCAL_WIN_SCORE
+                          score >= multiWinScore()
                         ) {
                           triggerLocalWin('white', 'score');
                         }
@@ -5525,12 +5651,12 @@ function animate() {
   }
 
   // 혼돈 디버프: 시야 축소(월드 렌더 후, HUD 전에 마스크)
-  if (!tutorialMode && gameMode === 'chaos' && !gameOver) {
+  if (!tutorialMode && paceMode() === 'chaos' && !gameOver) {
     drawChaosVisionTunnel(ctx);
   }
 
   // 혼돈 디버프 HUD는 시야 축소 위에 항상 보이게(좌상단)
-  if (!tutorialMode && gameMode === 'chaos' && chaosDebuffsPicked && chaosDebuffsPicked.length >= 2) {
+  if (!tutorialMode && paceMode() === 'chaos' && chaosDebuffsPicked && chaosDebuffsPicked.length >= 2) {
     const now = performance.now();
     if (chaosIntroUntil > 0 && now < chaosIntroUntil) {
       drawChaosDebuffHud(ctx, now, { dimBackground: true });
@@ -5773,7 +5899,7 @@ function animate() {
           ? '화이트 승리'
           : localWinner === 'gray'
             ? '그레이 승리'
-            : '그레이 승리';
+            : '무승부';
       ctx.fillStyle =
         localWinner === 'gray'
           ? 'rgba(160,160,160,0.92)'
@@ -5784,9 +5910,9 @@ function animate() {
       ctx.fillStyle = 'rgba(255,255,255,0.65)';
       const reason =
         localWinReason === 'score'
-          ? (LOCAL_WIN_SCORE + '점 달성')
-          : localWinReason === 'death'
-            ? '상대 게임오버'
+          ? (multiWinScore() + '점 달성')
+          : localWinReason === 'both'
+            ? (formatScoreForMenu(score) + ' : ' + formatScoreForMenu(localScoreGrayValue))
             : '';
       if (reason) ctx.fillText(reason, canvas.width / 2, canvas.height / 2 + px(2));
 
@@ -6000,8 +6126,6 @@ const menuScreen = document.getElementById('menu-screen');
 const tutorialModal = document.getElementById('tutorial-modal');
 const menuStart = document.getElementById('menu-start');
 const menuStartChoices = document.getElementById('menu-start-choices');
-const menuStartLocal = document.getElementById('menu-start-local');
-const menuStartOnline = document.getElementById('menu-start-online');
 const menuStartRequire = document.getElementById('menu-start-require');
 const menuTutorial = document.getElementById('menu-tutorial');
 const tutorialClose = document.getElementById('tutorial-close');
@@ -6831,13 +6955,13 @@ const PROFILE_TITLES = [
 ];
 const PROFILE_LEVEL_BG_IDS = ['bg10', 'bg20', 'bg30', 'bg50', 'bg60', 'bg70', 'bg80'];
 const PROFILE_BG_NAME = {
-  bg10: '물방울',
-  bg20: '네온',
-  bg30: '눈',
-  bg50: '균열',
-  bg60: '노이즈',
-  bg70: '금박',
-  bg80: '일식'
+  bg10: '달',
+  bg20: '화성',
+  bg30: '지구',
+  bg50: '토성',
+  bg60: '목성',
+  bg70: '천왕성',
+  bg80: '태양'
 };
 const PROFILE_SHOP_BG_PRICE = 125;
 const PROFILE_SHOP_BG = [
@@ -6858,7 +6982,14 @@ const PROFILE_SHOP_BG = [
   { id: 'shop-blossom', name: '벚꽃', price: PROFILE_SHOP_BG_PRICE },
   { id: 'shop-meteor', name: '유성', price: PROFILE_SHOP_BG_PRICE },
   { id: 'shop-void', name: '공허', price: PROFILE_SHOP_BG_PRICE },
-  { id: 'shop-light', name: '등대', price: PROFILE_SHOP_BG_PRICE }
+  { id: 'shop-light', name: '등대', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-drop', name: '물방울', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-neon', name: '네온', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-snow', name: '눈', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-crack', name: '균열', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-noise', name: '노이즈', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-gold', name: '금박', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-eclipse', name: '일식', price: PROFILE_SHOP_BG_PRICE }
 ];
 PROFILE_SHOP_BG.forEach(function (item) {
   PROFILE_BG_NAME[item.id] = item.name;
@@ -6901,7 +7032,7 @@ function profileProgress(xp) {
 }
 
 function defaultProfile() {
-  return { name: '', xp: 0, achievements: [], records: [], title: '', claimed: [], backgrounds: [], bg: '' };
+  return { name: '', xp: 0, achievements: [], records: [], title: '', claimed: [], backgrounds: [], bg: '', showPlays: false };
 }
 
 function loadProfile() {
@@ -6926,6 +7057,7 @@ function loadProfile() {
       base.backgrounds = obj.backgrounds.filter(function (id) { return typeof id === 'string'; });
     }
     if (typeof obj.bg === 'string') base.bg = obj.bg;
+    base.showPlays = obj.showPlays === true;
     if (Array.isArray(obj.claimed)) {
       base.claimed = obj.claimed.filter(function (n) {
         return n >= 1 && n <= PROFILE_MAX_LEVEL;
@@ -6936,15 +7068,41 @@ function loadProfile() {
     }
     }
   } catch (_) {}
-  if (relockProfileBackgrounds(base)) saveProfile(base);
-  else if (base.bg && base.backgrounds.indexOf(base.bg) === -1) {
+  let profileChanged = relockProfileBackgrounds(base);
+  if (migrateOldLevelBanners(base)) profileChanged = true;
+  if (base.bg && base.backgrounds.indexOf(base.bg) === -1) {
     base.bg = '';
-    saveProfile(base);
+    profileChanged = true;
   }
+  if (profileChanged) saveProfile(base);
   return base;
 }
 
 const PROFILE_BG_RELOCK_KEY = 'snakombo_profile_bg_relock_v1';
+const PROFILE_BG_PLANET_MOVE_KEY = 'snakombo_profile_bg_planet_v1';
+const PROFILE_OLD_LEVEL_TO_SHOP = {
+  bg10: 'shop-drop',
+  bg20: 'shop-neon',
+  bg30: 'shop-snow',
+  bg50: 'shop-crack',
+  bg60: 'shop-noise',
+  bg70: 'shop-gold',
+  bg80: 'shop-eclipse'
+};
+
+function migrateOldLevelBanners(st) {
+  try {
+    if (localStorage.getItem(PROFILE_BG_PLANET_MOVE_KEY) === '1') return false;
+  } catch (_) { return false; }
+  Object.keys(PROFILE_OLD_LEVEL_TO_SHOP).forEach(function (oldId) {
+    const shopId = PROFILE_OLD_LEVEL_TO_SHOP[oldId];
+    if (st.backgrounds.indexOf(oldId) !== -1 && st.backgrounds.indexOf(shopId) === -1) {
+      st.backgrounds.push(shopId);
+    }
+  });
+  try { localStorage.setItem(PROFILE_BG_PLANET_MOVE_KEY, '1'); } catch (_) {}
+  return true;
+}
 
 function relockProfileBackgrounds(st) {
   try {
@@ -7002,6 +7160,12 @@ function profileRewardForLevel(level) {
 
 function profileBgName(id) {
   return PROFILE_BG_NAME[id] || id;
+}
+
+function profileBannerSource(id) {
+  const levelById = { bg10: 10, bg20: 20, bg30: 30, bg50: 50, bg60: 60, bg70: 70, bg80: 80 };
+  if (levelById[id]) return levelById[id] + '레벨 보상';
+  return '상점';
 }
 
 function profileRewardLines(reward) {
@@ -7123,6 +7287,13 @@ const PROFILE_BG_URL = {
   bg60: 'assets/profile/bg60.png',
   bg70: 'assets/profile/bg70.png',
   bg80: 'assets/profile/bg80.png',
+  'shop-drop': 'assets/profile/shop-drop.png',
+  'shop-neon': 'assets/profile/shop-neon.png',
+  'shop-snow': 'assets/profile/shop-snow.png',
+  'shop-crack': 'assets/profile/shop-crack.png',
+  'shop-noise': 'assets/profile/shop-noise.png',
+  'shop-gold': 'assets/profile/shop-gold.png',
+  'shop-eclipse': 'assets/profile/shop-eclipse.png',
   'shop-nebula': 'assets/profile/shop-nebula.png',
   'shop-stars': 'assets/profile/shop-stars.png',
   'shop-void': 'assets/profile/shop-void.png',
@@ -7171,6 +7342,7 @@ function renderProfile() {
   renderProfileTitles(st, prog.level);
   renderProfileAchievements(st);
   renderProfileRecords(st);
+  renderProfilePlays(st);
   syncProfileNameConfirm();
 }
 
@@ -7271,6 +7443,25 @@ function renderProfileView(st, prog) {
       recRoot.appendChild(row);
     });
   }
+  const playRoot = document.getElementById('profile-view-plays');
+  if (playRoot) {
+    playRoot.textContent = '';
+    if (!st.showPlays) appendProfileEmpty(playRoot, '공개하지 않음');
+    else appendProfilePlayRow(playRoot, getTotalPlayCount());
+  }
+}
+
+function appendProfilePlayRow(root, count) {
+  const row = document.createElement('div');
+  row.className = 'profile-line';
+  const label = document.createElement('span');
+  label.textContent = '총 플레이';
+  const scoreEl = document.createElement('span');
+  scoreEl.className = 'profile-choice-score';
+  scoreEl.textContent = count + '판';
+  row.appendChild(label);
+  row.appendChild(scoreEl);
+  root.appendChild(row);
 }
 
 function renderProfileTitles(st, level) {
@@ -7325,6 +7516,7 @@ function renderProfileBackgrounds(st) {
     btn.type = 'button';
     btn.className = 'profile-bg-choice' + (st.bg === id ? ' is-on' : '');
     btn.style.backgroundImage = 'url("' + PROFILE_BG_URL[id] + '")';
+    btn.setAttribute('data-ach-tip', profileBgName(id) + '\n' + profileBannerSource(id));
     btn.addEventListener('click', function (e) {
       e.stopPropagation();
       const cur = loadProfile();
@@ -7406,6 +7598,31 @@ function renderProfileRecords(st) {
     });
     root.appendChild(btn);
   });
+}
+
+function renderProfilePlays(st) {
+  const root = document.getElementById('profile-plays');
+  if (!root) return;
+  root.textContent = '';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'profile-choice is-play' + (st.showPlays ? ' is-on' : '');
+  const label = document.createElement('span');
+  label.textContent = '총 플레이';
+  const scoreEl = document.createElement('span');
+  scoreEl.className = 'profile-choice-score';
+  scoreEl.textContent = getTotalPlayCount() + '판';
+  btn.appendChild(label);
+  btn.appendChild(scoreEl);
+  btn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    const cur = loadProfile();
+    cur.showPlays = !cur.showPlays;
+    saveProfile(cur);
+    playMenuUiSound('soft');
+    renderProfile();
+  });
+  root.appendChild(btn);
 }
 
 let profileEditing = false;
@@ -8141,7 +8358,9 @@ function relicDef(id) {
   return null;
 }
 function relicEffectsOn() {
-  return !tutorialMode && (gameMode === 'normal' || gameMode === 'hard' || gameMode === 'chaos');
+  if (tutorialMode) return false;
+  if (gameMode === 'multi') return !!multiRules.gems;
+  return gameMode === 'normal' || gameMode === 'hard' || gameMode === 'chaos';
 }
 function loadRelicState() {
   const fragments = {};
@@ -8245,16 +8464,20 @@ function relicScoreRangeMult() {
   return bonus > 0 ? 1 + bonus : 1;
 }
 function applyChaseStartScore() {
-  if (!relicEffectsOn() || localPlayEnabled || isOnlineMode()) return 0;
+  if (!relicEffectsOn()) return 0;
+  if ((localPlayEnabled || isOnlineMode()) && !multiRules.gems) return 0;
   const pts = CHASE_START[relicActiveLevel('chase')] || 0;
-  if (pts > 0) score = pts;
+  if (pts > 0) {
+    score = pts;
+    if (localPlayEnabled) localScoreGrayValue = pts;
+  }
   return pts;
 }
 function calcTokenGain(finalScore, playMs) {
   if (!(playMs >= 10000)) return 0;
   if (tutorialMode || gameMode === 'practice' || gameMode === 'multi') return 0;
   if (gameMode === 'roguelike') {
-    return Math.max(0, Math.round((rogueRunMs / 1000) * 1.5));
+    return Math.max(0, Math.round(rogueRunMs / 2000));
   }
   const scaleMult = (gameMode === 'hard' || gameMode === 'chaos') ? 1.5 : 1;
   let tokenGain = (finalScore / 5) * scaleMult;
@@ -8350,7 +8573,9 @@ function grantRelicFragment(obs) {
   saveRelicState(st);
   return def.name + ' 조각 획득';
 }
+let relicEnhanceBusy = false;
 function enhanceRelic(id) {
+  if (relicEnhanceBusy) return;
   const def = relicDef(id);
   if (!def) return;
   const st = relicState();
@@ -8364,18 +8589,52 @@ function enhanceRelic(id) {
     renderRelicPanel();
     return;
   }
-  spendScales(step.cost);
-  if (!st.pity) st.pity = {};
-  const chance = relicSuccessChance(id, lv);
-  if (Math.random() >= chance) {
-    st.pity[id] = { lv: lv, n: relicPityFails(id, lv) + 1 };
+  const rows = document.querySelectorAll('[data-relic-id="' + id + '"] .relic-lv');
+  const row = rows[lv - 1];
+  const success = Math.random() < relicSuccessChance(id, lv);
+  relicEnhanceBusy = true;
+  if (row) row.classList.add('is-shaking');
+  setTimeout(function () {
+    relicEnhanceBusy = false;
+    if (row) row.classList.remove('is-shaking');
+    spendScales(step.cost);
+    if (!st.pity) st.pity = {};
+    if (!success) {
+      st.pity[id] = { lv: lv, n: relicPityFails(id, lv) + 1 };
+      saveRelicState(st);
+      return;
+    }
+    st.levels[id] = lv + 1;
+    st.fragments[id] = 0;
+    st.pity[id] = { lv: lv + 1, n: 0 };
     saveRelicState(st);
-    return;
+    playRelicLevelSlide(id, lv, lv + 1);
+  }, 420);
+}
+function playRelicLevelSlide(id, fromLv, toLv) {
+  const box = document.querySelector('[data-relic-id="' + id + '"] .relic-levels');
+  if (!box) return;
+  const rows = box.querySelectorAll('.relic-lv');
+  const from = rows[fromLv - 1];
+  const to = rows[toLv - 1];
+  if (!from || !to || from === to) return;
+  to.classList.remove('is-now');
+  const slide = document.createElement('div');
+  slide.className = 'relic-lv-slide';
+  slide.style.top = from.offsetTop + 'px';
+  slide.style.height = from.offsetHeight + 'px';
+  box.appendChild(slide);
+  slide.getBoundingClientRect();
+  slide.style.transform = 'translateY(' + (to.offsetTop - from.offsetTop) + 'px)';
+  let done = false;
+  function finish() {
+    if (done) return;
+    done = true;
+    to.classList.add('is-now');
+    if (slide.parentNode) slide.parentNode.removeChild(slide);
   }
-  st.levels[id] = lv + 1;
-  st.fragments[id] = 0;
-  st.pity[id] = { lv: lv + 1, n: 0 };
-  saveRelicState(st);
+  slide.addEventListener('transitionend', finish);
+  setTimeout(finish, 420);
 }
 function relicNum(n) {
   const s = (Math.round(n * 100) / 100).toFixed(2);
@@ -8877,14 +9136,17 @@ function startGame() {
   runSegmentDist = SEGMENT_DIST;
   chaosTurnVel = 0;
   chaosTurnHoldMs = 0;
-  chaosIntroStartMs = gameMode === 'chaos' ? performance.now() : 0;
-  chaosIntroUntil = gameMode === 'chaos' ? (chaosIntroStartMs + 3000) : 0;
-  chaosIntroWasActive = gameMode === 'chaos' && chaosIntroUntil > 0;
+  chaosTurnVelGray = 0;
+  chaosTurnHoldMsGray = 0;
+  chaosIntroStartMs = paceMode() === 'chaos' ? performance.now() : 0;
+  chaosIntroUntil = paceMode() === 'chaos' ? (chaosIntroStartMs + 3000) : 0;
+  chaosIntroWasActive = paceMode() === 'chaos' && chaosIntroUntil > 0;
   resetSnake();
   gameStartDelayUntil = performance.now() + (gameMode === 'multi' ? 500 : 200);
   if (!tutorialMode && gameMode !== 'practice' && gameMode !== 'multi' && gameMode !== 'roguelike') {
     incrementModePlayCount(gameMode);
   }
+  if (!tutorialMode && gameMode === 'roguelike') incrementRoguePlayCount();
   if (!tutorialMode && gameMode === 'normal') {
     const n = incrementPlayCount();
     unlockAchievement('first_play');
@@ -9013,13 +9275,6 @@ function closeMenuStartToStart() {
     runMenuStartTransition('t1-back');
   }
 }
-function startLocalFromMenu() {
-  playMenuUiSound('primary');
-  nextRunIsLocal = true;
-  closeMenuStartToStart();
-  startGame();
-}
-
 // Initialize start menu stage (enables pointer events via CSS)
 setMenuStartStage(menuStartStage);
 
@@ -9029,10 +9284,9 @@ menuStart.addEventListener('click', e => {
     playMenuDenySound();
     return;
   }
-  // Only show Local/Online picker in multiplayer mode.
   if (gameMode === 'multi') {
     playMenuUiSound('soft');
-    openMenuStartChoose();
+    openOnlinePanel();
   } else {
     playMenuUiSound('primary');
     nextRunIsLocal = false;
@@ -9057,7 +9311,7 @@ menuStart.addEventListener('keydown', e => {
     }
     if (gameMode === 'multi') {
       playMenuUiSound('soft');
-      openMenuStartChoose();
+      openOnlinePanel();
     } else {
       playMenuUiSound('primary');
       nextRunIsLocal = false;
@@ -9066,57 +9320,55 @@ menuStart.addEventListener('keydown', e => {
     }
   }
 });
-if (menuStartLocal) {
-  menuStartLocal.addEventListener('click', e => {
-    e.stopPropagation();
-    startLocalFromMenu();
-  });
-  menuStartLocal.addEventListener('keydown', e => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      startLocalFromMenu();
-    }
-  });
-}
-if (menuStartOnline) {
-  menuStartOnline.addEventListener('click', e => {
-    e.stopPropagation();
-    playMenuUiSound('soft');
-    openOnlinePanel();
-  });
-  menuStartOnline.addEventListener('keydown', e => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      playMenuUiSound('soft');
-      openOnlinePanel();
-    }
-  });
-}
 // ── Online multiplayer panel wiring ──
 const onlineLobby = document.getElementById('online-lobby');
+const onlineCreatePanel = document.getElementById('online-create');
+const onlineJoinPanel = document.getElementById('online-join');
 const onlineHostWaiting = document.getElementById('online-host-waiting');
 const onlineClientJoining = document.getElementById('online-client-joining');
 const onlineConnectedPanel = document.getElementById('online-connected');
 const onlineErrorPanel = document.getElementById('online-error');
 const onlineErrorText = document.getElementById('online-error-text');
 const onlineRoomCodeDisplay = document.getElementById('online-room-code-display');
+const onlineCreateOpenBtn = document.getElementById('online-create-open');
+const onlineJoinOpenBtn = document.getElementById('online-join-open');
 const onlineCreateBtn = document.getElementById('online-create-btn');
 const onlineJoinBtn = document.getElementById('online-join-btn');
 const onlineJoinInput = document.getElementById('online-join-input');
-const onlineCopyBtn = document.getElementById('online-copy-btn');
 const onlineCancelBtn = document.getElementById('online-cancel-btn');
 const onlineCancelJoinBtn = document.getElementById('online-cancel-join-btn');
-const onlineBackBtn = document.getElementById('online-back-btn');
 const onlineErrorBackBtn = document.getElementById('online-error-back-btn');
+const onlineStartBtn = document.getElementById('online-start-btn');
+const onlineLeaveBtn = document.getElementById('online-leave-btn');
+const onlineRoomCodeLive = document.getElementById('online-room-code-live');
+const onlineWaitHost = document.getElementById('online-wait-host');
 const onlineStatusEl = document.getElementById('online-status');
 const onlineStatusDot = document.getElementById('online-status-dot');
 const onlineStatusText = document.getElementById('online-status-text');
 const onlinePanel = document.getElementById('menu-start-online-panel');
+const onlineScreenBack = document.getElementById('online-screen-back');
+
+function setOnlineRoomTitle(name) {
+  const text = String(name || '플레이어') + '님의 방';
+  document.querySelectorAll('[data-online-room-title]').forEach(function (el) {
+    el.textContent = text;
+  });
+}
+
+function leaveOnlineRoom() {
+  if (onlineStartTimer) { clearTimeout(onlineStartTimer); onlineStartTimer = null; }
+  onlineCloseAll();
+  showOnlineSubPanel(onlineLobby);
+}
+
+let onlineVisiblePanel = null;
 
 function showOnlineSubPanel(panel) {
-  [onlineLobby, onlineHostWaiting, onlineClientJoining, onlineConnectedPanel, onlineErrorPanel].forEach(p => {
+  [onlineLobby, onlineCreatePanel, onlineJoinPanel, onlineHostWaiting, onlineClientJoining, onlineConnectedPanel, onlineErrorPanel].forEach(p => {
     if (p) p.classList.toggle('hidden', p !== panel);
   });
+  onlineVisiblePanel = panel;
+  if (onlineScreenBack) onlineScreenBack.hidden = panel === onlineErrorPanel;
 }
 
 function openOnlinePanel() {
@@ -9152,6 +9404,145 @@ let onlineStartTimer = null;
 let onlineRestartHostReady = false;
 let onlineRestartClientReady = false;
 
+let onlinePeerCard = null;
+
+function localProfileCard() {
+  const st = loadProfile();
+  const prog = profileProgress(st.xp);
+  const choices = profileAchievementChoices();
+  const achievements = [];
+  st.achievements.forEach(function (id) {
+    for (let i = 0; i < choices.length; i++) {
+      if (choices[i].id !== id) continue;
+      const c = choices[i];
+      achievements.push({
+        name: c.name,
+        kind: c.hidden ? 'hidden' : (c.rare ? 'rare' : 'normal')
+      });
+    }
+  });
+  const records = [];
+  PROFILE_RECORD_MODES.forEach(function (mode) {
+    if (st.records.indexOf(mode.id) === -1) return;
+    records.push({ id: mode.id, label: mode.label, text: profileRecordText(mode) });
+  });
+  const plays = st.showPlays ? getTotalPlayCount() : null;
+  return {
+    name: profileDisplayName(st),
+    level: profileLevelText(prog),
+    title: profileEquippedTitle(st, prog.level),
+    xp: profileXpText(prog),
+    xpPct: prog.maxed ? 100 : (prog.need > 0 ? Math.max(0, Math.min(1, prog.into / prog.need)) * 100 : 100),
+    bg: PROFILE_BG_URL[st.bg] ? st.bg : '',
+    achievements: achievements,
+    records: records,
+    plays: plays
+  };
+}
+
+function sanitizeProfileCard(card) {
+  const modeIds = { normal: 1, hard: 1, chaos: 1, roguelike: 1 };
+  const kinds = { normal: 1, rare: 1, hidden: 1 };
+  const achievements = [];
+  const records = [];
+  if (card && Array.isArray(card.achievements)) {
+    card.achievements.slice(0, 3).forEach(function (item) {
+      if (!item || typeof item.name !== 'string') return;
+      achievements.push({
+        name: item.name.slice(0, 24),
+        kind: kinds[item.kind] ? item.kind : 'normal'
+      });
+    });
+  }
+  if (card && Array.isArray(card.records)) {
+    card.records.slice(0, 2).forEach(function (item) {
+      if (!item || !modeIds[item.id]) return;
+      records.push({
+        id: item.id,
+        label: String(item.label || '').slice(0, 12),
+        text: String(item.text || '').slice(0, 16)
+      });
+    });
+  }
+  return {
+    name: String((card && card.name) || '플레이어').slice(0, 16),
+    level: String((card && card.level) || '').slice(0, 12),
+    title: String((card && card.title) || '').slice(0, 24),
+    xp: String((card && card.xp) || '').slice(0, 24),
+    xpPct: Math.max(0, Math.min(100, Number(card && card.xpPct) || 0)),
+    bg: card && typeof card.bg === 'string' && PROFILE_BG_URL[card.bg] ? card.bg : '',
+    achievements: achievements,
+    records: records,
+    plays: card && Number.isFinite(Number(card.plays)) && Number(card.plays) >= 0 ? Math.floor(Number(card.plays)) : null
+  };
+}
+
+function paintOnlineProfile(root, card) {
+  if (!root) return;
+  const nameEl = root.querySelector('.online-profile-name');
+  const levelEl = root.querySelector('.online-profile-level');
+  if (!card) {
+    root.classList.add('is-empty');
+    root.classList.remove('has-bg', 'hidden');
+    root._profileCard = null;
+    if (nameEl) nameEl.textContent = '상대를 기다리는 중';
+    if (levelEl) levelEl.textContent = '';
+    root.style.removeProperty('--profile-bg');
+    return;
+  }
+  root.classList.remove('is-empty', 'hidden');
+  root._profileCard = card;
+  if (nameEl) nameEl.textContent = card.name || '플레이어';
+  if (levelEl) levelEl.textContent = card.level || '';
+  const url = card.bg && PROFILE_BG_URL[card.bg];
+  if (url) {
+    root.classList.add('has-bg');
+    root.style.setProperty('--profile-bg', 'url("' + url + '")');
+  } else {
+    root.classList.remove('has-bg');
+    root.style.removeProperty('--profile-bg');
+  }
+}
+
+function refreshOnlineProfiles() {
+  const mine = localProfileCard();
+  paintOnlineProfile(document.getElementById('online-profile-self-wait'), mine);
+  paintOnlineProfile(document.getElementById('online-profile-self'), mine);
+  paintOnlineProfile(document.getElementById('online-profile-peer'), onlinePeerCard);
+}
+
+function readOnlineRulesFromUi() {
+  const on = (rule) => {
+    const el = document.querySelector('#online-rules [data-rule="' + rule + '"].is-on');
+    return el ? el.getAttribute('data-value') : '';
+  };
+  return {
+    win: Number(on('win')) || 50,
+    gems: on('gems') === '1',
+    mode: on('mode') || 'normal'
+  };
+}
+
+function takePeerCard(data) {
+  const card = data && data.profile;
+  if (!card || typeof card !== 'object') return;
+  onlinePeerCard = sanitizeProfileCard(card);
+  refreshOnlineProfiles();
+}
+
+function showOnlineRoomReady(isHost) {
+  const hostCode = onlineRoomCodeDisplay ? onlineRoomCodeDisplay.textContent : '';
+  const joinCode = onlineJoinInput ? onlineJoinInput.value.toUpperCase().trim() : '';
+  const code = isHost ? hostCode : joinCode;
+  if (onlineRoomCodeLive) onlineRoomCodeLive.textContent = code && code !== '...' ? code : '----';
+  if (isHost) applyMultiRules(readOnlineRulesFromUi());
+  paintRoomRules();
+  if (onlineStartBtn) onlineStartBtn.classList.toggle('hidden', !isHost);
+  if (onlineWaitHost) onlineWaitHost.classList.toggle('hidden', isHost);
+  refreshOnlineProfiles();
+  showOnlineSubPanel(onlineConnectedPanel);
+}
+
 function onlineStartGameBoth() {
   // Host starts game for both
   gameMode = 'multi';
@@ -9170,23 +9561,45 @@ function onlineDoRestart() {
   gameStartDelayUntil = performance.now() + 500;
 }
 
+if (onlineCreateOpenBtn) {
+  onlineCreateOpenBtn.addEventListener('click', () => {
+    playMenuUiSound('soft');
+    showOnlineSubPanel(onlineCreatePanel);
+  });
+}
+if (onlineJoinOpenBtn) {
+  onlineJoinOpenBtn.addEventListener('click', () => {
+    playMenuUiSound('soft');
+    showOnlineSubPanel(onlineJoinPanel);
+    if (onlineJoinInput) onlineJoinInput.focus();
+  });
+}
 // Create room (host)
 if (onlineCreateBtn) {
   onlineCreateBtn.addEventListener('click', () => {
     playMenuUiSound('soft');
+    onlinePeerCard = null;
+    setOnlineRoomTitle(profileDisplayName(loadProfile()));
+    applyMultiRules(readOnlineRulesFromUi());
+    paintRoomRules();
+    refreshOnlineProfiles();
     showOnlineSubPanel(onlineHostWaiting);
     if (onlineRoomCodeDisplay) onlineRoomCodeDisplay.textContent = '...';
 
     onlineCreateRoom({
       onPeerConnected: () => {
-        showOnlineSubPanel(onlineConnectedPanel);
-        // Send start signal after 1s
-        onlineStartTimer = setTimeout(() => {
-          onlineStartTimer = null;
-          if (!onlineConnected) return;
-          onlineSendSignal('start');
-          onlineStartGameBoth();
-        }, 1000);
+        const rules = readOnlineRulesFromUi();
+        applyMultiRules(rules);
+        onlineSendSignal('rules', {
+          win: rules.win,
+          gems: rules.gems,
+          mode: rules.mode,
+          profile: localProfileCard()
+        });
+        showOnlineRoomReady(true);
+      },
+      onProfile: (data) => {
+        takePeerCard(data);
       },
       onDisconnected: (reason) => {
         // Clear the start timer so a pending 1.5s countdown doesn't fire
@@ -9233,16 +9646,28 @@ if (onlineJoinBtn) {
 
     onlineJoinRoom(code, {
       onConnected: () => {
-        showOnlineSubPanel(onlineConnectedPanel);
-        // Client waits for 'start' signal from host
+        onlinePeerCard = null;
+        showOnlineRoomReady(false);
+        onlineSendSignal('profile', { profile: localProfileCard() });
       },
-      onStartSignal: () => {
+      onRules: (data) => {
+        applyMultiRules(data);
+        paintRoomRules();
+        if (data && data.profile && data.profile.name) setOnlineRoomTitle(data.profile.name);
+        takePeerCard(data);
+        onlineSendSignal('profile', { profile: localProfileCard() });
+      },
+      onProfile: (data) => {
+        takePeerCard(data);
+      },
+      onStartSignal: (data) => {
+        applyMultiRules(data || {});
         gameMode = 'multi';
         nextRunIsLocal = true;
         localPlayEnabled = true;
         if (onlinePanel) onlinePanel.classList.add('hidden');
         if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-              startGame();
+        startGame();
       },
       onStateReceived: (state) => {
         onlineClientPushState(state);
@@ -9287,16 +9712,119 @@ if (onlineJoinInput) {
   });
 }
 
-// Copy room code
-if (onlineCopyBtn) {
-  onlineCopyBtn.addEventListener('click', () => {
-    const code = onlineRoomCodeDisplay ? onlineRoomCodeDisplay.textContent : '';
-    if (code && code !== '...' && code !== '----') {
-      navigator.clipboard.writeText(code).then(() => {
-        onlineCopyBtn.textContent = '복사됨!';
-        setTimeout(() => { onlineCopyBtn.textContent = '복사'; }, 1500);
-      }).catch(() => {});
+function hideOnlineProfileTip() {
+  const tip = document.getElementById('online-profile-tip');
+  if (tip) tip.hidden = true;
+}
+
+function showOnlineProfileTip(root) {
+  const tip = document.getElementById('online-profile-tip');
+  const card = root && root._profileCard;
+  if (!tip || !card) return;
+  const nameEl = tip.querySelector('.profile-view-name');
+  const levelEl = tip.querySelector('.profile-tip-level');
+  const titleEl = tip.querySelector('.profile-tip-title');
+  const xpEl = tip.querySelector('.profile-tip-xp');
+  const fill = tip.querySelector('.profile-xp-fill');
+  if (nameEl) nameEl.textContent = card.name || '플레이어';
+  if (levelEl) levelEl.textContent = card.level || '';
+  if (titleEl) titleEl.textContent = card.title || '';
+  if (xpEl) xpEl.textContent = card.xp || '';
+  if (fill) fill.style.width = (Number(card.xpPct) || 0) + '%';
+  const achRoot = tip.querySelector('[data-tip="ach"]');
+  const recRoot = tip.querySelector('[data-tip="rec"]');
+  if (achRoot) {
+    achRoot.textContent = '';
+    if (!card.achievements || !card.achievements.length) {
+      const p = document.createElement('p');
+      p.className = 'profile-empty';
+      p.textContent = '공개하지 않음';
+      achRoot.appendChild(p);
+    } else card.achievements.forEach(function (item) {
+      const row = document.createElement('div');
+      row.className = 'profile-line is-' + (item.kind || 'normal');
+      row.textContent = item.name;
+      achRoot.appendChild(row);
+    });
+  }
+  if (recRoot) {
+    recRoot.textContent = '';
+    if (!card.records || !card.records.length) {
+      const p = document.createElement('p');
+      p.className = 'profile-empty';
+      p.textContent = '공개하지 않음';
+      recRoot.appendChild(p);
+    } else card.records.forEach(function (item) {
+      const row = document.createElement('div');
+      row.className = 'profile-line is-mode-' + item.id;
+      const name = document.createElement('span');
+      name.textContent = item.label;
+      const score = document.createElement('span');
+      score.className = 'profile-choice-score';
+      score.textContent = item.text;
+      row.appendChild(name);
+      row.appendChild(score);
+      recRoot.appendChild(row);
+    });
+  }
+  const playRoot = tip.querySelector('[data-tip="plays"]');
+  if (playRoot) {
+    playRoot.textContent = '';
+    if (!(card.plays >= 0) || card.plays === null) appendProfileEmpty(playRoot, '공개하지 않음');
+    else appendProfilePlayRow(playRoot, card.plays);
+  }
+  const body = tip.querySelector('.profile-panel-body');
+  if (body) body.scrollTop = 0;
+  tip.hidden = false;
+  const rect = root.getBoundingClientRect();
+  const overlay = document.getElementById('menu-start-online-panel');
+  const base = overlay ? overlay.getBoundingClientRect() : { left: 0, top: 0 };
+  const width = tip.offsetWidth || 256;
+  const gap = 10;
+  let left = rect.right + gap - base.left;
+  if (rect.right + gap + width > window.innerWidth - 8) left = rect.left - gap - width - base.left;
+  if (left < 8) left = 8;
+  let top = rect.top - base.top;
+  const room = Math.max(140, window.innerHeight - (base.top + top) - 8);
+  tip.style.maxHeight = Math.min(22 * 16, room) + 'px';
+  const height = tip.offsetHeight || 180;
+  if (base.top + top + height > window.innerHeight - 8) top = Math.max(8, window.innerHeight - 8 - height - base.top);
+  tip.style.left = left + 'px';
+  tip.style.top = top + 'px';
+}
+let onlineProfileTipAnchor = null;
+if (onlinePanel) {
+  onlinePanel.addEventListener('click', (e) => {
+    const row = e.target.closest('.online-profile');
+    const tip = document.getElementById('online-profile-tip');
+    if (e.target.closest('#online-profile-tip')) {
+      if (e.target.closest('[data-online-profile-close]')) {
+        hideOnlineProfileTip();
+        onlineProfileTipAnchor = null;
+      }
+      return;
     }
+    if (row && !row.classList.contains('is-empty') && row._profileCard) {
+      if (onlineProfileTipAnchor === row && tip && !tip.hidden) {
+        hideOnlineProfileTip();
+        onlineProfileTipAnchor = null;
+        return;
+      }
+      showOnlineProfileTip(row);
+      onlineProfileTipAnchor = row;
+      return;
+    }
+    hideOnlineProfileTip();
+    onlineProfileTipAnchor = null;
+  });
+}
+
+if (onlineScreenBack) {
+  onlineScreenBack.addEventListener('click', () => {
+    playMenuUiSound('soft');
+    if (onlineVisiblePanel === onlineLobby) closeOnlinePanel();
+    else if (onlineVisiblePanel === onlineCreatePanel || onlineVisiblePanel === onlineJoinPanel) showOnlineSubPanel(onlineLobby);
+    else leaveOnlineRoom();
   });
 }
 
@@ -9319,11 +9847,45 @@ if (onlineCancelJoinBtn) {
   });
 }
 
-// Back to choose
-if (onlineBackBtn) {
-  onlineBackBtn.addEventListener('click', () => {
+const onlineRulesEl = document.getElementById('online-rules');
+document.querySelectorAll('.online-rule-head').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    const box = btn.closest('.online-rule-box');
+    if (!box) return;
+    const open = !box.classList.contains('is-open');
+    box.classList.toggle('is-open', open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+});
+
+if (onlineRulesEl) {
+  onlineRulesEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-rule]');
+    if (!btn || !onlineRulesEl.contains(btn)) return;
+    const rule = btn.getAttribute('data-rule');
+    onlineRulesEl.querySelectorAll('button[data-rule="' + rule + '"]').forEach((el) => {
+      el.classList.toggle('is-on', el === btn);
+    });
+  });
+}
+
+if (onlineStartBtn) {
+  onlineStartBtn.addEventListener('click', () => {
+    if (!onlineConnected) return;
+    playMenuUiSound('primary');
+    const rules = readOnlineRulesFromUi();
+    applyMultiRules(rules);
+    onlineSendSignal('start', rules);
+    onlineStartGameBoth();
+  });
+}
+
+if (onlineLeaveBtn) {
+  onlineLeaveBtn.addEventListener('click', () => {
     playMenuUiSound('soft');
-    closeOnlinePanel();
+    if (onlineStartTimer) { clearTimeout(onlineStartTimer); onlineStartTimer = null; }
+    onlineCloseAll();
+    showOnlineSubPanel(onlineLobby);
   });
 }
 
@@ -9375,6 +9937,11 @@ updateMenuHighScoreDisplay();
 syncMenuStartLockState();
 hideLoadingScreenSoon();
 maybeShowMainIntro();
+checkForUpdate();
+setInterval(checkForUpdate, 30000);
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible') checkForUpdate();
+});
 
 // 테스트: 아무 업적 토스트 계속 띄우기
 const ACHIEVEMENT_TOAST_TEST = false;

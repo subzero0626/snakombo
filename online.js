@@ -434,6 +434,14 @@ function onlineCreateRoom(callbacks) {
           return;
         }
 
+        if (data._t === 'profile') {
+          var profileCb = _onlineCallbacks;
+          if (profileCb && typeof profileCb.onProfile === 'function') {
+            try { profileCb.onProfile(data); } catch (e) { console.error('[online] onProfile error:', e); }
+          }
+          return;
+        }
+
         // Restart ready from client
         if (data._t === 'restart_ready') {
           var cb = _onlineCallbacks;
@@ -573,11 +581,27 @@ function onlineJoinRoom(roomCode, callbacks) {
           return;
         }
 
+        if (data._t === 'profile') {
+          var peerProfileCb = _onlineCallbacks;
+          if (peerProfileCb && typeof peerProfileCb.onProfile === 'function') {
+            try { peerProfileCb.onProfile(data); } catch (e) { console.error('[online] onProfile error:', e); }
+          }
+          return;
+        }
+
+        if (data._t === 'rules') {
+          var rulesCb = _onlineCallbacks;
+          if (rulesCb && typeof rulesCb.onRules === 'function') {
+            try { rulesCb.onRules(data); } catch (e) { console.error('[online] onRules error:', e); }
+          }
+          return;
+        }
+
         // Start signal from host
         if (data._t === 'start') {
           var cb = _onlineCallbacks;
           if (cb && typeof cb.onStartSignal === 'function') {
-            try { cb.onStartSignal(); } catch (e) { console.error('[online] onStartSignal error:', e); }
+            try { cb.onStartSignal(data); } catch (e) { console.error('[online] onStartSignal error:', e); }
           }
           return;
         }
@@ -706,10 +730,14 @@ function onlineSendInput(inputObj) {
 // ---------------------------------------------------------------------------
 // Send arbitrary signal to the other peer (works for both host and client)
 // ---------------------------------------------------------------------------
-function onlineSendSignal(type) {
+function onlineSendSignal(type, extra) {
   if (!_onlineConn || !_onlineConn.open) return;
   try {
-    _onlineConn.send({ _t: type });
+    var msg = { _t: type };
+    if (extra && typeof extra === 'object') {
+      Object.keys(extra).forEach(function (key) { msg[key] = extra[key]; });
+    }
+    _onlineConn.send(msg);
   } catch (e) {
     console.error('[online] send signal error:', e);
   }
