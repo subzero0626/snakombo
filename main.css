@@ -792,6 +792,9 @@
     font-weight: 800;
     color: rgba(161, 161, 170, 0.95);
   }
+  .shop-item-kind.is-high {
+    color: #f5d0a9;
+  }
   .profile-name-prompt {
     position: fixed;
     inset: 0;
@@ -1401,7 +1404,30 @@
     background: rgba(24, 24, 27, 0.42);
   }
   .shop-item.is-owned {
-    opacity: 0.72;
+    background: rgba(17, 17, 19, 0.8);
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+  .shop-item.is-owned .shop-item-preview::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.42);
+    pointer-events: none;
+  }
+  .shop-item.is-owned .shop-item-name,
+  .shop-item.is-owned .shop-item-kind,
+  .shop-item.is-owned .shop-item-buy {
+    color: rgba(174, 176, 180, 0.86);
+  }
+  .shop-item.is-owned .shop-item-price {
+    color: rgba(215, 184, 110, 0.7);
+  }
+  .shop-item.is-owned .shop-item-kind.is-high {
+    color: rgba(210, 176, 140, 0.72);
+  }
+  .shop-item.is-owned .shop-item-buy {
+    border-color: rgba(255, 255, 255, 0.09);
+    background: rgba(255, 255, 255, 0.045);
   }
   .shop-item-preview {
     position: relative;
@@ -1416,6 +1442,7 @@
   }
   .shop-item-badge {
     position: absolute;
+    z-index: 1;
     top: 0.28rem;
     right: 0.28rem;
     padding: 0.12rem 0.35rem;

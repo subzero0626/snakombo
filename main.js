@@ -6983,6 +6983,8 @@ const PROFILE_SHOP_BG = [
   { id: 'shop-noise', name: '노이즈', price: PROFILE_SHOP_BG_PRICE },
   { id: 'shop-gold', name: '금박', price: PROFILE_SHOP_BG_PRICE },
   { id: 'shop-eclipse', name: '일식', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-sword', name: '검', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-constellation', name: '별자리', price: PROFILE_SHOP_BG_PRICE },
   { id: 'shop-spell', name: '마법서', price: PROFILE_SHOP_SCENE_PRICE },
   { id: 'shop-glacier', name: '빙하', price: PROFILE_SHOP_SCENE_PRICE },
   { id: 'shop-crystal', name: '수정', price: PROFILE_SHOP_SCENE_PRICE },
@@ -6991,7 +6993,9 @@ const PROFILE_SHOP_BG = [
   { id: 'shop-lava', name: '용암', price: PROFILE_SHOP_SCENE_PRICE },
   { id: 'shop-thunder', name: '번개', price: PROFILE_SHOP_SCENE_PRICE },
   { id: 'shop-shard', name: '파편', price: PROFILE_SHOP_SCENE_PRICE },
-  { id: 'shop-blast', name: '폭발', price: PROFILE_SHOP_SCENE_PRICE }
+  { id: 'shop-blast', name: '폭발', price: PROFILE_SHOP_SCENE_PRICE },
+  { id: 'shop-blackhole', name: '블랙홀', price: PROFILE_SHOP_SCENE_PRICE },
+  { id: 'shop-amethyst', name: '자수정', price: PROFILE_SHOP_SCENE_PRICE }
 ];
 PROFILE_SHOP_BG.forEach(function (item) {
   PROFILE_BG_NAME[item.id] = item.name;
@@ -7170,6 +7174,8 @@ function profileBgName(id) {
 function profileBannerSource(id) {
   const levelById = { bg10: 10, bg20: 20, bg30: 30, bg50: 50, bg60: 60, bg70: 70, bg80: 80 };
   if (levelById[id]) return levelById[id] + '레벨 보상';
+  const shop = shopBgById(id);
+  if (shop) return shop.price === PROFILE_SHOP_SCENE_PRICE ? '고급 배너' : '일반 배너';
   return '상점';
 }
 
@@ -7325,7 +7331,11 @@ const PROFILE_BG_URL = {
   'shop-lava': 'assets/profile/shop-lava.png',
   'shop-thunder': 'assets/profile/shop-thunder.png',
   'shop-shard': 'assets/profile/shop-shard.png',
-  'shop-blast': 'assets/profile/shop-blast.png'
+  'shop-blast': 'assets/profile/shop-blast.png',
+  'shop-sword': 'assets/profile/shop-sword.png',
+  'shop-constellation': 'assets/profile/shop-constellation.png',
+  'shop-blackhole': 'assets/profile/shop-blackhole.png',
+  'shop-amethyst': 'assets/profile/shop-amethyst.png'
 };
 
 function applyProfileBackground(st) {
@@ -8148,8 +8158,9 @@ function renderShopBackgrounds(root) {
     name.className = 'shop-item-name';
     name.textContent = item.name;
     const kind = document.createElement('span');
-    kind.className = 'shop-item-kind';
-    kind.textContent = '프로필 배경';
+    const high = item.price === PROFILE_SHOP_SCENE_PRICE;
+    kind.className = 'shop-item-kind' + (high ? ' is-high' : '');
+    kind.textContent = high ? '고급 배너' : '일반 배너';
     title.appendChild(name);
     title.appendChild(kind);
     const foot = document.createElement('div');
