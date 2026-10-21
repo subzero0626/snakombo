@@ -351,7 +351,7 @@ function getRunSegmentCount() {
 let angle = 0;
 const BASE_SPEED = 4.3 * GAME_SCALE * (IS_MOBILE ? 1.08 : 1); // 모바일만 속도 소폭 상향(+8%)
 const SPEED_INCREMENT = 0.048 * GAME_SCALE; // per second (시간 경과 가속 완화, 기본 0.06)
-const COMBO_TIMEOUT_MS = 1500;
+const COMBO_TIMEOUT_MS = 1000;
 /** 튜토리얼에서만 콤보 유지 제한(초) — 본편은 COMBO_TIMEOUT_MS */
 const TUTORIAL_COMBO_TIMEOUT_MS = 4000;
 
@@ -639,10 +639,6 @@ let localComboGrayValue = 0;
 let localLastScoreTimeGray = 0;
 /** 본편 한 판에서 달성한 최대 콤보 (업적용) */
 let maxComboThisRun = 0;
-/** 본편 한 판에서 누적된 콤보 보너스 합 (콤보점수, 업적: 티끌모아 태산) */
-let comboBonusPointsThisRun = 0;
-/** 연속으로 한 판 최종 점수가 정확히 7점인 횟수 (행운아) */
-let consecutiveExactSevenGames = 0;
 /** 본편 한 판에서 움직이는 장애물 연속 통과 횟수 (무브먼트) */
 let consecutiveMovingObsPasses = 0;
 /** 로그라이크: 한 장애물에서 한 번에 얻은 최대 점수 (인생은 한방) */
@@ -698,7 +694,7 @@ const CHAOS_DEBUFF_POOL = [
   'obs_glitch', // 장애물 가끔 글리치 (1/7)
   'speed_flux', // 이동속도 유동 (0.7~1.5)
   'turn_inertia', // 회전 관성 증가(살짝)
-  'combo_short', // 콤보 유지시간 1.25초
+  'combo_short', // 콤보 유지시간 0.75초
   'tight_collision', // 충돌 봐주기 제거
   'no_half_point', // 기본점수 구간 축소 (0.5점 구간 삭제)
   'small_safe_zone', // 안전구역 축소(뱀 주변 스폰 금지 구역 감소)
@@ -1250,12 +1246,12 @@ const ROGUE_AUGMENTS = [
   {
     id: 'gamble', cat: 'offense', name: '도박',
     levels: [
-      { desc: ['득점 배율 ', { h: '0.7~1.5배' }],
-        apply() { rogueGambleMin = 0.7; rogueGambleMax = 1.5; } },
-      { desc: ['득점 배율 ', { h: '0.8~1.7배' }],
-        apply() { rogueGambleMin = 0.8; rogueGambleMax = 1.7; } },
-      { desc: ['득점 배율 ', { h: '1~2배' }],
-        apply() { rogueGambleMin = 1; rogueGambleMax = 2; } }
+      { desc: ['득점 배율 ', { h: '0.8~1.5배' }],
+        apply() { rogueGambleMin = 0.8; rogueGambleMax = 1.5; } },
+      { desc: ['득점 배율 ', { h: '0.8~2배' }],
+        apply() { rogueGambleMin = 0.8; rogueGambleMax = 2; } },
+      { desc: ['득점 배율 ', { h: '0.8~2.5배' }],
+        apply() { rogueGambleMin = 0.8; rogueGambleMax = 2.5; } }
     ]
   },
   {
@@ -1272,12 +1268,12 @@ const ROGUE_AUGMENTS = [
   {
     id: 'counter', cat: 'offense', name: '역습',
     levels: [
-      { desc: ['피격 후 ', { h: '1.5초' }, '간 모든 점수 ', { h: '2배' }],
-        apply() { rogueCounterDurationMs = 1500; rogueCounterMult = 2; } },
-      { desc: ['피격 후 ', { h: '1.5초' }, '간 모든 점수 ', { h: '2.5배' }],
-        apply() { rogueCounterDurationMs = 1500; rogueCounterMult = 2.5; } },
-      { desc: ['피격 후 ', { h: '1.5초' }, '간 모든 점수 ', { h: '3배' }],
-        apply() { rogueCounterDurationMs = 1500; rogueCounterMult = 3; } }
+      { desc: ['피격 후 ', { h: '2.5초' }, '간 모든 점수 ', { h: '2배' }],
+        apply() { rogueCounterDurationMs = 2500; rogueCounterMult = 2; } },
+      { desc: ['피격 후 ', { h: '2.5초' }, '간 모든 점수 ', { h: '2.5배' }],
+        apply() { rogueCounterDurationMs = 2500; rogueCounterMult = 2.5; } },
+      { desc: ['피격 후 ', { h: '2.5초' }, '간 모든 점수 ', { h: '3배' }],
+        apply() { rogueCounterDurationMs = 2500; rogueCounterMult = 3; } }
     ]
   },
   {
@@ -1505,19 +1501,19 @@ function rogueBuildEnhancedChoice(base, level) {
   if (id === 'counter') {
     if (level === 1) {
       return {
-        desc: ['피격 후 ', g('1.8초'), '간 모든 점수 ', g('2.4배')],
-        apply() { rogueCounterDurationMs = 1800; rogueCounterMult = 2.4; }
+        desc: ['피격 후 ', g('2.8초'), '간 모든 점수 ', g('2.4배')],
+        apply() { rogueCounterDurationMs = 2800; rogueCounterMult = 2.4; }
       };
     }
     if (level === 2) {
       return {
-        desc: ['피격 후 ', g('1.8초'), '간 모든 점수 ', g('3배')],
-        apply() { rogueCounterDurationMs = 1800; rogueCounterMult = 3; }
+        desc: ['피격 후 ', g('2.8초'), '간 모든 점수 ', g('3배')],
+        apply() { rogueCounterDurationMs = 2800; rogueCounterMult = 3; }
       };
     }
     return {
-      desc: ['피격 후 ', g('1.8초'), '간 모든 점수 ', g('3.6배')],
-      apply() { rogueCounterDurationMs = 1800; rogueCounterMult = 3.6; }
+      desc: ['피격 후 ', g('2.8초'), '간 모든 점수 ', g('3.6배')],
+      apply() { rogueCounterDurationMs = 2800; rogueCounterMult = 3.6; }
     };
   }
 
@@ -3385,7 +3381,7 @@ function triggerGameOver(cause) {
   }
   // 업적: 연습·로그라이크 제외. 개별 업적의 모드 제한은 checkAchievementsAfterRun에서 처리.
   if (!tutorialMode && gameMode !== 'practice' && gameMode !== 'roguelike') {
-    checkAchievementsAfterRun(score, maxComboThisRun, comboBonusPointsThisRun);
+    checkAchievementsAfterRun(score, maxComboThisRun);
   }
   // 토큰: 일반/하드/혼돈은 점수 기반, 로그라이크는 2초당 1. 연습·멀티는 주지 않음. 지급량은 반올림 정수.
   if (!tutorialMode && gameMode !== 'practice' && gameMode !== 'multi') {
@@ -3761,31 +3757,17 @@ function refreshAchievementsFromStorage() {
 }
 
 /** 본편 게임 오버 시 호출 (튜토리얼 제외) */
-function checkAchievementsAfterRun(finalScore, maxCombo, comboBonusTotal) {
+function checkAchievementsAfterRun(finalScore, maxCombo) {
   const fs = typeof finalScore === 'number' ? finalScore : 0;
   const mc = typeof maxCombo === 'number' ? maxCombo : 0;
-  const cb =
-    typeof comboBonusTotal === 'number' && Number.isFinite(comboBonusTotal)
-      ? comboBonusTotal
-      : 0;
   if (fs >= 35 && gameMode === 'normal') unlockAchievement('score_35');
   if (mc >= 10) unlockAchievement('combo_10');
-  if (mc < 5 && cb >= 25) unlockAchievement('tikkeul_taesan');
+  if (mc <= 3 && fs >= 60) unlockAchievement('tikkeul_taesan');
   {
     const h = new Date().getHours();
     if (h >= 7 && h < 8 && fs >= 15) unlockAchievement('hidden_early_bird');
   }
   if (getHighScore('normal') >= 85) unlockAchievement('high_60');
-  {
-    const rounded = Math.round(fs * 10) / 10;
-    const isExactlySeven = Number.isFinite(fs) && rounded === 7;
-    if (isExactlySeven) {
-      consecutiveExactSevenGames += 1;
-      if (consecutiveExactSevenGames >= 2) unlockAchievement('lucky_7_streak');
-    } else {
-      consecutiveExactSevenGames = 0;
-    }
-  }
   if (
     fs >= 25 &&
     halfLaneLock !== null &&
@@ -3861,7 +3843,7 @@ function checkExtraAchievements() {
     unlockAchievement('transcend_150');
   }
   if (getScales() >= 1000) unlockAchievement('hidden_token_1000');
-  if (getScalesSpent() >= 3000) unlockAchievement('golden_age');
+  if (getScalesSpent() >= 4500) unlockAchievement('golden_age');
   try {
     if (typeof RELIC_DEFS !== 'undefined' && hasAllRelicsOpen()) unlockAchievement('gem_jeweler');
   } catch (_) {}
@@ -4044,7 +4026,6 @@ function resetSnake() {
   localComboGrayValue = 0;
   localLastScoreTimeGray = 0;
   maxComboThisRun = 0;
-  comboBonusPointsThisRun = 0;
   consecutiveMovingObsPasses = 0;
   halfLaneLock = null;
   wrongHalfAccumMs = 0;
@@ -4091,7 +4072,6 @@ function initTutorialStep1Intro() {
   lastScoreTime = 0;
   scoreStart = performance.now();
   maxComboThisRun = 0;
-  comboBonusPointsThisRun = 0;
   halfLaneLock = null;
   wrongHalfAccumMs = 0;
   mainRunSteerDUsed = false;
@@ -4133,7 +4113,6 @@ function initHardTutorial() {
   lastScoreTime = 0;
   scoreStart = performance.now();
   maxComboThisRun = 0;
-  comboBonusPointsThisRun = 0;
   halfLaneLock = null;
   wrongHalfAccumMs = 0;
   mainRunSteerDUsed = false;
@@ -4175,7 +4154,6 @@ function initChaosTutorial() {
   lastScoreTime = 0;
   scoreStart = performance.now();
   maxComboThisRun = 0;
-  comboBonusPointsThisRun = 0;
   halfLaneLock = null;
   wrongHalfAccumMs = 0;
   mainRunSteerDUsed = false;
@@ -4221,7 +4199,6 @@ function initRogueTutorial() {
   lastScoreTime = 0;
   scoreStart = performance.now();
   maxComboThisRun = 0;
-  comboBonusPointsThisRun = 0;
   halfLaneLock = null;
   wrongHalfAccumMs = 0;
   mainRunSteerDUsed = false;
@@ -5053,7 +5030,7 @@ function animate() {
         : gameMode === 'practice'
           ? COMBO_TIMEOUT_MS * practiceSettings.comboHoldMult
           : chaosHasDebuff('combo_short')
-            ? 1250
+            ? 750
             : COMBO_TIMEOUT_MS) + (isRogue() ? rogueComboExtraMs : 0) + relicEchoMs();
       const dropHalfBand = chaosHasDebuff('no_half_point');
       const scoreMaxRatio = paceMode() === 'hard' ? 3.6 : (isRogue() ? rogueSniperMaxRatio : 5);
@@ -5131,9 +5108,9 @@ function animate() {
                       localLastScoreTimeGray = nowMs;
                       const comboBonus = localComboGrayValue >= 2 ? (localComboGrayValue - 1) * 0.5 : 0;
                       let pts = (obs[bestKey] || (dropHalfBand ? 1 : 0.5)) + comboBonus;
-                      pts = rollRubyScore(pts).pts;
+                      const ruby = rollRubyScore(pts);
                       if (!(tutorialMode && tutorialStep === 3)) {
-                        localScoreGrayValue = roundScore(localScoreGrayValue + pts);
+                        localScoreGrayValue = roundScore(localScoreGrayValue + ruby.base);
                         if (
                           localPlayEnabled &&
                           !localWinner &&
@@ -5141,12 +5118,18 @@ function animate() {
                         ) {
                           triggerLocalWin('gray', 'score');
                         }
-                        floatingTexts.push({
-                          x: hx, y: hy - 20,
-                          text: '+' + formatScoreForMenu(pts),
-                          life: FLOAT_TEXT_LIFE,
-                          color: [120, 120, 120]
-                        });
+                        const scorePop = '+' + formatScoreForMenu(ruby.base);
+                        for (let pop = 0; pop < ruby.mult; pop++) {
+                          floatingTexts.push({
+                            x: hx, y: hy - 20,
+                            text: scorePop,
+                            life: FLOAT_TEXT_LIFE,
+                            delay: pop * 250,
+                            color: [120, 120, 120],
+                            rubyGain: pop > 0 ? ruby.base : 0,
+                            rubyKind: 'gray'
+                          });
+                        }
                       }
                     } else {
                       if (timedOut) { combo = 0; comboSoundStep = 0; }
@@ -5184,11 +5167,10 @@ function animate() {
                       }
                       if (!(tutorialMode && tutorialStep === 3)) {
                         const ruby = rollRubyScore(pts);
-                        pts = ruby.pts;
                         const scoreBefore = score;
-                        score = roundScore(score + pts);
+                        score = roundScore(score + ruby.base);
                         if (isRogue()) {
-                          rogueGauge = Math.min(rogueMaxGauge, rogueGauge + pts);
+                          rogueGauge = Math.min(rogueMaxGauge, rogueGauge + ruby.base);
                         }
                         if (
                           localPlayEnabled &&
@@ -5210,9 +5192,6 @@ function animate() {
                           halfLaneLock =
                             points[0].x < canvas.width * 0.5 ? 'left' : 'right';
                         }
-                        if (!tutorialMode && runCountsForRecords()) {
-                          comboBonusPointsThisRun += comboBonus;
-                        }
                         if (!tutorialMode && gameMode !== 'practice' && gameMode !== 'multi') {
                           if (obs.isMoving) {
                             consecutiveMovingObsPasses++;
@@ -5229,7 +5208,9 @@ function animate() {
                             x: hx, y: hy - 20,
                             text: scorePop,
                             life: FLOAT_TEXT_LIFE,
-                            delay: pop * 250
+                            delay: pop * 250,
+                            rubyGain: pop > 0 ? ruby.base : 0,
+                            rubyKind: 'white'
                           });
                         }
                         if (obs.relicId) {
@@ -5310,6 +5291,7 @@ function animate() {
   // Draw gray snake behind obstacles (local mode)
   if (
     localPlayEnabled &&
+    !localDeadGray &&
     (!tutorialMode || tutorialSnakeActive) &&
     localSnakeGray.points &&
     localSnakeGray.points.length >= getRunSegmentCount()
@@ -5409,7 +5391,8 @@ function animate() {
     }
   }
 
-  // White snake above obstacles
+  // White snake above obstacles. 멀티에서 죽으면 바로 지운다.
+  if (!(localPlayEnabled && localDeadWhite)) {
   drawSnakeBody(points, [255, 255, 255]);
   if (opalInvulnUntil > performance.now()) {
     ctx.save();
@@ -5430,6 +5413,7 @@ function animate() {
   }
   // 뱀 머리 장신구(꾸미기)
   drawSnakeAccessory(points[0], points[1]);
+  }
 
   // Draw golden obstacles above the player (z-order).
   for (let i = staticObs.length - 1; i >= 0; i--) {
@@ -5605,8 +5589,12 @@ function animate() {
   for (let i = floatingTexts.length - 1; i >= 0; i--) {
     const ft = floatingTexts[i];
     if (ft.delay > 0) {
-      if (playing) ft.delay -= frameDeltaMs;
-      continue;
+      if (playing || (gameOver && ft.rubyGain)) ft.delay -= frameDeltaMs;
+      if (!(ft.delay > 0) && ft.rubyGain) {
+        grantRubyFollowUp(ft.rubyKind, ft.rubyGain);
+        ft.rubyGain = 0;
+      }
+      if (ft.delay > 0) continue;
     }
     if (playing) {
       // 60fps 기준(1px/프레임, life 60≈1초)을 시간 기반으로 환산 → 주사율 무관
@@ -5671,7 +5659,7 @@ function animate() {
     : gameMode === 'practice'
       ? COMBO_TIMEOUT_MS * practiceSettings.comboHoldMult
       : chaosHasDebuff('combo_short')
-        ? 1250
+        ? 750
         : COMBO_TIMEOUT_MS) + (isRogue() ? rogueComboExtraMs : 0) + relicEchoMs();
   if (
     playing &&
@@ -6001,6 +5989,8 @@ function animate() {
     onlineSendState({
       w: { pts: onlineCompressPoints(points), s: score, c: combo, a: angle },
       g: { pts: onlineCompressPoints(localSnakeGray.points), s: localScoreGrayValue, c: localComboGrayValue, a: localSnakeGray.angle },
+      dw: localDeadWhite ? 1 : 0,
+      dg: localDeadGray ? 1 : 0,
       obs: onlineCompressObstacles(staticObs),
       go: gameOver,
       win: localWinner,
@@ -6089,6 +6079,8 @@ function animate() {
           }
         }
       }
+      localDeadWhite = !!st.dw;
+      localDeadGray = !!st.dg;
       gameOver = !!st.go;
       if (st.win) { localWinner = st.win; localWinReason = st.wr || ''; }
       onlineRestartHostReady = !!st.rh;
@@ -6768,7 +6760,7 @@ function addScalesSpent(n) {
   if (!(n > 0)) return getScalesSpent();
   const next = getScalesSpent() + n;
   try { localStorage.setItem(SCALES_SPENT_KEY, String(next)); } catch (_) {}
-  if (next >= 3000) {
+  if (next >= 4500) {
     try { unlockAchievement('golden_age'); } catch (_) {}
   }
   return next;
@@ -6964,6 +6956,7 @@ const PROFILE_BG_NAME = {
   bg80: '태양'
 };
 const PROFILE_SHOP_BG_PRICE = 125;
+const PROFILE_SHOP_SCENE_PRICE = PROFILE_SHOP_BG_PRICE * 4;
 const PROFILE_SHOP_BG = [
   { id: 'shop-stars', name: '별무더기', price: PROFILE_SHOP_BG_PRICE },
   { id: 'shop-fog', name: '안개 숲', price: PROFILE_SHOP_BG_PRICE },
@@ -6989,7 +6982,16 @@ const PROFILE_SHOP_BG = [
   { id: 'shop-crack', name: '균열', price: PROFILE_SHOP_BG_PRICE },
   { id: 'shop-noise', name: '노이즈', price: PROFILE_SHOP_BG_PRICE },
   { id: 'shop-gold', name: '금박', price: PROFILE_SHOP_BG_PRICE },
-  { id: 'shop-eclipse', name: '일식', price: PROFILE_SHOP_BG_PRICE }
+  { id: 'shop-eclipse', name: '일식', price: PROFILE_SHOP_BG_PRICE },
+  { id: 'shop-spell', name: '마법서', price: PROFILE_SHOP_SCENE_PRICE },
+  { id: 'shop-glacier', name: '빙하', price: PROFILE_SHOP_SCENE_PRICE },
+  { id: 'shop-crystal', name: '수정', price: PROFILE_SHOP_SCENE_PRICE },
+  { id: 'shop-crown', name: '왕관', price: PROFILE_SHOP_SCENE_PRICE },
+  { id: 'shop-blacksun', name: '검은 해', price: PROFILE_SHOP_SCENE_PRICE },
+  { id: 'shop-lava', name: '용암', price: PROFILE_SHOP_SCENE_PRICE },
+  { id: 'shop-thunder', name: '번개', price: PROFILE_SHOP_SCENE_PRICE },
+  { id: 'shop-shard', name: '파편', price: PROFILE_SHOP_SCENE_PRICE },
+  { id: 'shop-blast', name: '폭발', price: PROFILE_SHOP_SCENE_PRICE }
 ];
 PROFILE_SHOP_BG.forEach(function (item) {
   PROFILE_BG_NAME[item.id] = item.name;
@@ -7003,7 +7005,10 @@ const PROFILE_RECORD_MODES = [
 ];
 
 function profileCost(level) {
-  return 100 + (level - 1) * 20;
+  if (level <= 20) return 100 + (level - 1) * 15;
+  if (level <= 40) return 405 + (level - 21) * 20;
+  if (level <= 60) return 810 + (level - 41) * 25;
+  return 1315 + (level - 61) * 30;
 }
 
 function profileXpCap() {
@@ -7252,7 +7257,7 @@ function claimProfileReward(level) {
   playMenuUiSound('primary');
   if (!(reward.tokens > 0) && !reward.achievement) showProfileLevelToast(level, 0, profileRewardText(reward));
   renderProfile();
-  if (profilePane === 'rewards') renderProfileRewards();
+  if (profilePane === 'rewards') renderProfileRewards(false);
 }
 
 function profileAchievementChoices() {
@@ -7311,7 +7316,16 @@ const PROFILE_BG_URL = {
   'shop-glass': 'assets/profile/shop-glass.png',
   'shop-cave': 'assets/profile/shop-cave.png',
   'shop-blossom': 'assets/profile/shop-blossom.png',
-  'shop-map': 'assets/profile/shop-map.png'
+  'shop-map': 'assets/profile/shop-map.png',
+  'shop-spell': 'assets/profile/shop-spell.png',
+  'shop-glacier': 'assets/profile/shop-glacier.png',
+  'shop-crystal': 'assets/profile/shop-crystal.png',
+  'shop-crown': 'assets/profile/shop-crown.png',
+  'shop-blacksun': 'assets/profile/shop-blacksun.png',
+  'shop-lava': 'assets/profile/shop-lava.png',
+  'shop-thunder': 'assets/profile/shop-thunder.png',
+  'shop-shard': 'assets/profile/shop-shard.png',
+  'shop-blast': 'assets/profile/shop-blast.png'
 };
 
 function applyProfileBackground(st) {
@@ -7633,11 +7647,13 @@ function isProfileOpen() {
   return !!(panel && panel.classList.contains('is-open'));
 }
 
-function renderProfileRewards() {
+function renderProfileRewards(snapToReady) {
   const root = document.getElementById('profile-reward-list');
   if (!root) return;
   const st = loadProfile();
   const prog = profileProgress(st.xp);
+  const scroller = root.closest('.profile-panel-body');
+  const keepScroll = scroller ? scroller.scrollTop : 0;
   root.textContent = '';
   let focusEl = null;
   for (let lv = 1; lv <= PROFILE_MAX_LEVEL; lv++) {
@@ -7690,11 +7706,13 @@ function renderProfileRewards() {
     });
     root.appendChild(box);
   }
-  if (!focusEl) return;
-  const scroller = root.closest('.profile-panel-body');
   if (!scroller) return;
-  const rowTop = focusEl.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
-  scroller.scrollTop = Math.max(0, rowTop - scroller.clientHeight / 2);
+  if (snapToReady && focusEl) {
+    const rowTop = focusEl.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+    scroller.scrollTop = Math.max(0, rowTop - scroller.clientHeight / 2);
+    return;
+  }
+  scroller.scrollTop = keepScroll;
 }
 
 function setProfilePane(pane) {
@@ -7717,7 +7735,7 @@ function setProfilePane(pane) {
       ? 'https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/settings.svg'
       : 'https://cdn.jsdelivr.net/npm/lucide-static@0.468.0/icons/arrow-left.svg';
   }
-  if (profilePane === 'rewards') renderProfileRewards();
+  if (profilePane === 'rewards') renderProfileRewards(true);
   else if (profilePane === 'view') renderProfile();
 }
 
@@ -8440,7 +8458,7 @@ function relicActiveLevel(id) {
   return relicLevel(id);
 }
 // index = Lv (0 미개방)
-const ECHO_MS = [0, 100, 200, 300, 400, 500, 600, 700];
+const ECHO_MS = [0, 100, 200, 300, 500, 700, 900, 1000];
 const HARVEST_BONUS = [0, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50];
 const CLING_CHANCE = [0, 0.05, 0.07, 0.09, 0.11, 0.11, 0.13, 0.15];
 const CALM_BONUS = [0, 0.05, 0.08, 0.11, 0.14, 0.17, 0.20, 0.25];
@@ -8457,6 +8475,23 @@ function rollRubyScore(pts) {
   if (!(chance > 0) || Math.random() >= chance) return { pts: pts, base: pts, mult: 1 };
   const mult = lv >= 5 ? 3 : 2;
   return { pts: roundScore(pts * mult), base: pts, mult: mult };
+}
+function grantRubyFollowUp(kind, amount) {
+  if (!(amount > 0)) return;
+  if (kind === 'gray') {
+    localScoreGrayValue = roundScore(localScoreGrayValue + amount);
+    if (localPlayEnabled && !localWinner && localScoreGrayValue >= multiWinScore()) {
+      triggerLocalWin('gray', 'score');
+    }
+    return;
+  }
+  score = roundScore(score + amount);
+  if (localPlayEnabled && !localWinner && score >= multiWinScore()) {
+    triggerLocalWin('white', 'score');
+  }
+  if (!tutorialMode && gameMode === 'practice' && score >= 500) {
+    unlockAchievement('hidden_practice_500');
+  }
 }
 function relicScoreRangeMult() {
   if (!relicEffectsOn()) return 1;
@@ -8573,9 +8608,7 @@ function grantRelicFragment(obs) {
   saveRelicState(st);
   return def.name + ' 조각 획득';
 }
-let relicEnhanceBusy = false;
 function enhanceRelic(id) {
-  if (relicEnhanceBusy) return;
   const def = relicDef(id);
   if (!def) return;
   const st = relicState();
@@ -8589,27 +8622,19 @@ function enhanceRelic(id) {
     renderRelicPanel();
     return;
   }
-  const rows = document.querySelectorAll('[data-relic-id="' + id + '"] .relic-lv');
-  const row = rows[lv - 1];
   const success = Math.random() < relicSuccessChance(id, lv);
-  relicEnhanceBusy = true;
-  if (row) row.classList.add('is-shaking');
-  setTimeout(function () {
-    relicEnhanceBusy = false;
-    if (row) row.classList.remove('is-shaking');
-    spendScales(step.cost);
-    if (!st.pity) st.pity = {};
-    if (!success) {
-      st.pity[id] = { lv: lv, n: relicPityFails(id, lv) + 1 };
-      saveRelicState(st);
-      return;
-    }
-    st.levels[id] = lv + 1;
-    st.fragments[id] = 0;
-    st.pity[id] = { lv: lv + 1, n: 0 };
+  spendScales(step.cost);
+  if (!st.pity) st.pity = {};
+  if (!success) {
+    st.pity[id] = { lv: lv, n: relicPityFails(id, lv) + 1 };
     saveRelicState(st);
-    playRelicLevelSlide(id, lv, lv + 1);
-  }, 420);
+    return;
+  }
+  st.levels[id] = lv + 1;
+  st.fragments[id] = 0;
+  st.pity[id] = { lv: lv + 1, n: 0 };
+  saveRelicState(st);
+  playRelicLevelSlide(id, lv, lv + 1);
 }
 function playRelicLevelSlide(id, fromLv, toLv) {
   const box = document.querySelector('[data-relic-id="' + id + '"] .relic-levels');
